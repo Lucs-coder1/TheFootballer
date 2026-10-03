@@ -901,6 +901,7 @@ function escapeHTML(s){ return String(s).replace(/[&<>"']/g, function(c){ return
 
 function renderHome(){
   var el = document.getElementById('view-home');
+  if(hasBackend()){ renderHomeReal(el); return; }
   var news = allNews();
   var forYou = news.filter(newsMatchesProfile);
   var top = news.filter(function(n){ return n.top; }).concat(news.filter(function(n){return !n.top;}).slice(0,8));
@@ -924,6 +925,83 @@ function renderHome(){
     feedEl.innerHTML = list.map(newsCardHTML).join('');
   }
   renderLiveScoresWidget();
+}
+
+/* Real news mode: cards built from real football-data.org matches (recaps for finished games,
+   previews for upcoming ones) rather than simulated data — no written articles exist in the API,
+   so this is auto-generated from real scores/fixtures, not editorial journalism. Click a card to
+   open the full match detail (goals, cards, referee) via openMatchDetailModal. */
+function renderHomeReal(el){
+  el.innerHTML =
+    '<div id="liveScoresWidget"></div>'+
+    '<div class="section-head"><h2>Your feed</h2><p class="muted" style="font-size:11px;">Real match news · via football-data.org</p></div>'+
+    '<div class="tabs" id="homeTabs">'+
+      '<button data-t="foryou" class="'+(APP.homeTab==='foryou'?'active':'')+'">For You</button>'+
+      '<button data-t="top" class="'+(APP.homeTab==='top'?'active':'')+'">Top Stories</button>'+
+    '</div>'+
+    '<div id="homeFeed" class="grid"><p class="muted" style="padding:14px 0;">Loading real news…</p></div>';
+  document.querySelectorAll('#homeTabs button').forEach(function(b){
+    b.addEventListener('click', function(){ APP.homeTab=b.getAttribute('data-t'); renderHome(); });
+  });
+  renderLiveScoresWidget();
+  ensureRealMatches().then(function(matches){
+    var feedEl = document.getElementById('homeFeed');
+    if(!feedEl) return;
+    var items = realNewsItems(matches);
+    var forYou = items.filter(realNewsMatchesProfile);
+    var list = APP.homeTab==='foryou' ? forYou : items;
+    if(list.length===0){
+      feedEl.outerHTML = '<div class="empty" id="homeFeed">'+icon('search',34)+'<p><b>No real match news right now.</b></p>'+
+        '<p class="muted" style="max-width:340px;">Covers the Premier League, La Liga, Bundesliga, Serie A and Ligue 1 only — this can be empty during an international break, or if nothing in those leagues matches your followed teams/competitions.</p></div>';
+    } else {
+      feedEl.innerHTML = list.map(realNewsCardHTML).join('');
+      document.querySelectorAll('#homeFeed .news-card[data-match-id]').forEach(function(card){
+        card.addEventListener('click', function(){ openMatchDetailModal(card.getAttribute('data-match-id')); });
+      });
+    }
+  });
+}
+function realNewsItems(matches){
+  var finished = matches.filter(function(m){return m.finished;}).sort(function(a,b){return b.date-a.date;});
+  var upcoming = matches.filter(function(m){return !m.finished;}).sort(function(a,b){return a.date-b.date;});
+  return finished.concat(upcoming).map(function(m){
+    if(m.finished){
+      return {
+        matchId:m.rawId, home:m.home, away:m.away, homeCrest:m.homeCrest, awayCrest:m.awayCrest, comp:m.comp,
+        title: m.home+' '+m.score[0]+'-'+m.score[1]+' '+m.away,
+        summary: 'Full-time in the '+m.comp+': '+m.home+' '+m.score[0]+'-'+m.score[1]+' '+m.away+'. Tap for the full match report.',
+        kind:'Report', time:'Final'
+      };
+    }
+    return {
+      matchId:m.rawId, home:m.home, away:m.away, homeCrest:m.homeCrest, awayCrest:m.awayCrest, comp:m.comp,
+      title: m.home+' vs '+m.away,
+      summary: m.home+' host '+m.away+' in the '+m.comp+' on '+fmtDate(m.date)+'. Tap for kickoff details.',
+      kind:'Preview', time: fmtDate(m.date)
+    };
+  });
+}
+function realNewsMatchesProfile(item){
+  var p = APP.profile; if(!p) return false;
+  if(teamNameMatchesProfile(item.home) || teamNameMatchesProfile(item.away)) return true;
+  if(item.comp && p.comps.indexOf(item.comp)>-1) return true;
+  return false;
+}
+function realNewsCardHTML(item){
+  var h = hashStr(item.title);
+  var hue = ['#0A1B3D','#1452D6','#2C6CF0','#143566'][h%4];
+  var overlay = '<div class="news-crests">'+realCrestHTML(item.homeCrest,item.home,32)+realCrestHTML(item.awayCrest,item.away,32)+'</div>';
+  return '<article class="card news-card" data-match-id="'+item.matchId+'" style="cursor:pointer;">'+
+    '<div class="news-art" style="background:linear-gradient(135deg,'+hue+', color-mix(in srgb, '+hue+' 60%, #000))">'+
+      overlay+
+      '<span class="tag">'+escapeHTML(item.kind)+'</span>'+
+    '</div>'+
+    '<div class="news-body">'+
+      '<h4>'+escapeHTML(item.title)+'</h4>'+
+      '<p>'+escapeHTML(item.summary)+'</p>'+
+      '<div class="news-foot"><span>'+escapeHTML(item.comp||'Football')+'</span><b>'+escapeHTML(item.time)+'</b></div>'+
+    '</div>'+
+  '</article>';
 }
 
 /* ============================ LIVE SCORES (optional, via Apps Script + football-data.org) ============================
@@ -973,6 +1051,126 @@ function renderLiveScoresWidget(){
     var listEl = document.getElementById('liveScoresList');
     if(listEl) listEl.textContent = 'Could not reach the live scores backend. '+(err&&err.message?err.message:'');
     try{ console.error('[liveScores]', err); }catch(e){}
+  });
+}
+
+/* ============================ REAL MATCH DATA (news / calendar / predictions, via Apps Script + football-data.org) ============================
+   Separate dataset from the curated 52-team one above, same reasoning as the Live Scores panel:
+   only covers the big-five leagues the free football-data.org tier gives us, fetched once per
+   page load and cached in REAL_MATCHES. Falls back to the curated simulated system everywhere
+   hasBackend() is false, so the Claude Artifact preview keeps working exactly as before. */
+var REAL_MATCHES = null;
+var REAL_MATCHES_PROMISE = null;
+function normalizeRealMatch(m){
+  return {
+    id: 'fd'+m.id, rawId: m.id,
+    home: m.home, away: m.away,
+    homeCrest: m.homeCrest||'', awayCrest: m.awayCrest||'',
+    comp: m.competition, venue: m.venue||'',
+    date: new Date(m.utcDate), status: m.status,
+    finished: m.status==='FINISHED',
+    score: [ (m.homeScore!=null?m.homeScore:null), (m.awayScore!=null?m.awayScore:null) ]
+  };
+}
+function ensureRealMatches(){
+  if(!hasBackend()) return Promise.resolve([]);
+  if(REAL_MATCHES) return Promise.resolve(REAL_MATCHES);
+  if(REAL_MATCHES_PROMISE) return REAL_MATCHES_PROMISE;
+  REAL_MATCHES_PROMISE = backendCall('matches', {}).then(function(res){
+    REAL_MATCHES_PROMISE = null;
+    REAL_MATCHES = (res && res.ok && res.matches) ? res.matches.map(normalizeRealMatch) : [];
+    return REAL_MATCHES;
+  }).catch(function(err){
+    REAL_MATCHES_PROMISE = null;
+    REAL_MATCHES = [];
+    try{ console.error('[realMatches]', err); }catch(e){}
+    return REAL_MATCHES;
+  });
+  return REAL_MATCHES_PROMISE;
+}
+function realTotalPredictionPoints(matches){
+  var total=0;
+  matches.forEach(function(m){
+    var p = APP.predictions[m.id];
+    var pts = predictionPoints(p, m);
+    if(pts!==null) total += pts;
+  });
+  return total;
+}
+function teamNameMatchesProfile(name){
+  var p = APP.profile; if(!p || !name) return false;
+  var lname = name.toLowerCase();
+  return p.teams.some(function(id){
+    var t = TEAM_BY_ID[id]; if(!t) return false;
+    var short = t.name.toLowerCase();
+    return lname.indexOf(short)>-1 || short.indexOf(lname.replace(/\s*(fc|cf|afc)\.?$/i,'').trim())>-1;
+  });
+}
+function realCrestHTML(url, name, size){
+  size = size||24;
+  if(url){
+    return '<img class="crest" src="'+escapeHTML(url)+'" alt="" width="'+size+'" height="'+size+'" '+
+      'style="object-fit:contain;" onerror="this.outerHTML=\'<span class=&quot;crest&quot; style=&quot;width:'+size+'px;height:'+size+'px;display:inline-flex;align-items:center;justify-content:center;background:var(--navy);color:#fff;border-radius:50%;font-size:'+Math.round(size*0.4)+'px;font-weight:800;&quot;>'+escapeHTML((name||'?').charAt(0))+'</span>\'">';
+  }
+  return '<span class="crest" style="width:'+size+'px;height:'+size+'px;display:inline-flex;align-items:center;justify-content:center;background:var(--navy);color:#fff;border-radius:50%;font-size:'+Math.round(size*0.4)+'px;font-weight:800;">'+escapeHTML((name||'?').charAt(0))+'</span>';
+}
+function wireMatchDetailButtons(root){
+  (root||document).querySelectorAll('[data-view-detail]').forEach(function(b){
+    b.addEventListener('click', function(e){ e.stopPropagation(); openMatchDetailModal(b.getAttribute('data-view-detail')); });
+  });
+}
+function openMatchDetailModal(matchId){
+  var html =
+    '<div class="modal">'+
+      '<div class="modal-head"><h3>Match details</h3><button class="iconbtn" id="closeModal">'+icon('close',18)+'</button></div>'+
+      '<div id="matchDetailBody" class="muted" style="padding:28px 0;text-align:center;">Loading…</div>'+
+    '</div>';
+  openModal(html);
+  backendCall('matchDetail', {id: matchId}).then(function(res){
+    var bodyEl = document.getElementById('matchDetailBody');
+    if(!bodyEl) return;
+    if(!res || !res.ok || !res.match){
+      bodyEl.textContent = (res && res.error) || 'Could not load match details.';
+      return;
+    }
+    var m = res.match;
+    var scoreLine = (m.homeScore!=null && m.awayScore!=null) ? (m.homeScore+' – '+m.awayScore) : 'vs';
+    var htLine = (m.halfTimeHome!=null && m.halfTimeAway!=null) ? ('Half-time '+m.halfTimeHome+' – '+m.halfTimeAway) : '';
+    var goalsHTML = (m.goals && m.goals.length)
+      ? '<div class="card" style="gap:6px;margin-top:12px;padding:12px 16px;"><h4 style="font-size:13px;margin-bottom:4px;">Goals</h4>'+
+          m.goals.map(function(g){
+            return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:3px 0;">'+
+              '<span>'+escapeHTML(g.scorer||'Unknown')+(g.assist?' <span class="muted">(assist: '+escapeHTML(g.assist)+')</span>':'')+'</span>'+
+              '<span class="mono" style="white-space:nowrap;">'+(g.minute!=null?g.minute+"'":'')+' · '+escapeHTML(g.team==='home'?m.home:m.away)+'</span>'+
+            '</div>';
+          }).join('')+
+        '</div>'
+      : '';
+    var bookingsHTML = (m.bookings && m.bookings.length)
+      ? '<div class="card" style="gap:6px;margin-top:12px;padding:12px 16px;"><h4 style="font-size:13px;margin-bottom:4px;">Cards</h4>'+
+          m.bookings.map(function(b){
+            return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:3px 0;">'+
+              '<span>'+escapeHTML(b.player||'Unknown')+'</span>'+
+              '<span class="mono" style="white-space:nowrap;">'+(b.card==='RED_CARD'?'🟥':'🟨')+' '+(b.minute!=null?b.minute+"'":'')+' · '+escapeHTML(b.team==='home'?m.home:m.away)+'</span>'+
+            '</div>';
+          }).join('')+
+        '</div>'
+      : '';
+    var refsHTML = (m.referees && m.referees.length) ? '<p class="muted" style="font-size:12px;margin-top:10px;text-align:center;">Referee: '+escapeHTML(m.referees.join(', '))+'</p>' : '';
+    bodyEl.outerHTML =
+      '<div id="matchDetailBody">'+
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px 0;">'+
+          '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;">'+realCrestHTML(m.homeCrest,m.home,40)+'<span style="font-size:13px;text-align:center;">'+escapeHTML(m.home)+'</span></div>'+
+          '<div style="text-align:center;padding-top:2px;"><div class="mono" style="font-size:22px;font-weight:800;">'+scoreLine+'</div>'+(htLine?'<div class="muted" style="font-size:11px;">'+escapeHTML(htLine)+'</div>':'')+'</div>'+
+          '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;">'+realCrestHTML(m.awayCrest,m.away,40)+'<span style="font-size:13px;text-align:center;">'+escapeHTML(m.away)+'</span></div>'+
+        '</div>'+
+        '<p class="muted" style="font-size:12.5px;text-align:center;">'+escapeHTML(m.competition||'')+' · '+fmtDate(new Date(m.utcDate))+(m.venue?' · '+escapeHTML(m.venue):'')+'</p>'+
+        goalsHTML+bookingsHTML+refsHTML+
+        (!m.goals||!m.goals.length ? '<p class="muted" style="font-size:12.5px;text-align:center;margin-top:12px;">'+(m.status==='FINISHED'?'No goals in this match.':'Match hasn\'t kicked off yet — check back for live detail once it starts.')+'</p>' : '')+
+      '</div>';
+  }).catch(function(err){
+    var bodyEl = document.getElementById('matchDetailBody');
+    if(bodyEl) bodyEl.textContent = 'Could not load match details. '+(err&&err.message?err.message:'');
   });
 }
 
@@ -1200,6 +1398,7 @@ function myTotalPredictionPoints(){
 }
 function renderPredictions(){
   var el = document.getElementById('view-predictions');
+  if(hasBackend()){ renderPredictionsReal(el); return; }
   var upcoming = MATCHES.filter(function(m){return !m.finished;}).sort(function(a,b){return a.date-b.date;});
   var past = MATCHES.filter(function(m){return m.finished;}).sort(function(a,b){return b.date-a.date;});
   el.innerHTML =
@@ -1213,6 +1412,9 @@ function renderPredictions(){
   var doneEl = document.getElementById('predDone');
   doneEl.innerHTML = past.length ? past.map(predRowHTML).join('') : '<p class="muted" style="padding:14px 0;">No results yet.</p>';
 
+  wirePredSaveHandlers(renderPredictions);
+}
+function wirePredSaveHandlers(rerender){
   document.querySelectorAll('[data-pred-save]').forEach(function(btn){
     btn.addEventListener('click', function(){
       var id = btn.getAttribute('data-pred-save');
@@ -1222,9 +1424,56 @@ function renderPredictions(){
       if(isNaN(h)||isNaN(a)||h<0||a<0){ hEl.style.borderColor='var(--bad)'; aEl.style.borderColor='var(--bad)'; return; }
       APP.predictions[id] = {h:h,a:a};
       save(scopedKey('tf_predictions'), APP.predictions);
-      renderPredictions();
+      rerender();
     });
   });
+}
+
+/* Real predictions mode: open/finished fixtures come from football-data.org via ensureRealMatches.
+   Your own picks still live only in this browser (scopedKey('tf_predictions')) — only the
+   fixture/result DATA is shared and real, same closeness-based scoring as before. */
+function renderPredictionsReal(el){
+  el.innerHTML =
+    '<div class="section-head"><h2>Predictions</h2><p class="muted mono">Loading…</p></div>'+
+    '<p class="muted" style="font-size:12.5px;">Real fixtures via football-data.org (Premier League, La Liga, Bundesliga, Serie A, Ligue 1). Scoring is closeness-based: 10 minus the total goal difference between your pick and the real score (minimum 0).</p>'+
+    '<div class="card" style="gap:0;padding:4px 16px;"><div class="section-head" style="padding:10px 0;"><h3 style="font-size:16px;">Open fixtures</h3></div><div id="predOpen"><p class="muted" style="padding:14px 0;">Loading…</p></div></div>'+
+    '<div class="card" style="gap:0;padding:4px 16px;"><div class="section-head" style="padding:10px 0;"><h3 style="font-size:16px;">Results</h3></div><div id="predDone"></div></div>';
+  ensureRealMatches().then(function(matches){
+    var totalEl = document.querySelector('#view-predictions .section-head p.muted.mono');
+    if(totalEl) totalEl.textContent = realTotalPredictionPoints(matches)+' pts banked';
+    var upcoming = matches.filter(function(m){return !m.finished;}).sort(function(a,b){return a.date-b.date;});
+    var past = matches.filter(function(m){return m.finished;}).sort(function(a,b){return b.date-a.date;});
+    var openEl = document.getElementById('predOpen');
+    if(openEl) openEl.innerHTML = upcoming.length ? upcoming.map(realPredRowHTML).join('') : '<p class="muted" style="padding:14px 0;">No upcoming fixtures in the next couple of weeks — check back closer to kickoff, or this could be an international break.</p>';
+    var doneEl = document.getElementById('predDone');
+    if(doneEl) doneEl.innerHTML = past.length ? past.map(realPredRowHTML).join('') : '<p class="muted" style="padding:14px 0;">No results yet.</p>';
+    wirePredSaveHandlers(function(){ renderPredictions(); });
+    wireMatchDetailButtons(el);
+  });
+}
+function realPredRowHTML(m){
+  var pred = APP.predictions[m.id];
+  var right = m.finished
+    ? '<span class="match-score mono">'+m.score[0]+' – '+m.score[1]+'</span>'
+    : '<div class="pred-inputs"><input type="number" min="0" data-h="'+m.id+'" value="'+(pred?pred.h:'')+'"><span>–</span><input type="number" min="0" data-a="'+m.id+'" value="'+(pred?pred.a:'')+'"><button class="btn sm" data-pred-save="'+m.id+'">Save</button></div>';
+  var ptsBadge = '';
+  if(m.finished){
+    var pts = predictionPoints(pred, m);
+    if(pts===null) ptsBadge = '<span class="pred-pts" style="background:var(--paper);color:var(--muted);">No pick</span>';
+    else ptsBadge = '<span class="pred-pts '+pointTier(pts)+'">'+pts+' pt'+(pts===1?'':'s')+'</span>';
+  } else if(pred){
+    ptsBadge = '<span class="pred-pts" style="background:var(--paper);color:var(--muted);">Your pick: '+pred.h+'–'+pred.a+'</span>';
+  }
+  return '<div class="pred-row">'+
+    '<div class="pred-teams">'+
+      '<div class="pred-team">'+realCrestHTML(m.homeCrest,m.home,22)+'<span>'+escapeHTML(m.home)+'</span></div>'+
+      '<span class="pred-vs">vs</span>'+
+      '<div class="pred-team">'+realCrestHTML(m.awayCrest,m.away,22)+'<span>'+escapeHTML(m.away)+'</span></div>'+
+    '</div>'+
+    right+
+    '<div class="pred-meta">'+escapeHTML(m.comp)+' · '+fmtDate(m.date)+' · <button class="btn sm ghost" data-view-detail="'+m.rawId+'" style="padding:2px 8px;font-size:11px;">Details</button></div>'+
+    (ptsBadge? '<div style="width:100%;display:flex;justify-content:flex-end;">'+ptsBadge+'</div>' : '')+
+  '</div>';
 }
 function predRowHTML(m){
   var home=TEAM_BY_ID[m.home], away=TEAM_BY_ID[m.away];
@@ -1256,6 +1505,7 @@ function predRowHTML(m){
 /* ============================ CALENDAR (±3 day picker) ============================ */
 function renderCalendar(){
   var el = document.getElementById('view-calendar');
+  if(hasBackend()){ renderCalendarReal(el); return; }
   var filters = ['all','myteams'].concat(COMPETITIONS);
   var dayBtns = [];
   for(var off=-3; off<=3; off++){ dayBtns.push(off); }
@@ -1314,6 +1564,76 @@ function matchRowHTML(m){
   '</div>';
 }
 
+/* Real calendar mode: same ±3-day picker, backed by real football-data.org fixtures. Day tabs
+   render immediately (TODAY-based, no fetch needed); the list and competition chips fill in once
+   ensureRealMatches resolves. */
+function renderCalendarReal(el){
+  var dayBtns = []; for(var off=-3; off<=3; off++){ dayBtns.push(off); }
+  el.innerHTML =
+    '<div class="section-head"><h2>Match calendar</h2><p class="muted" style="font-size:11px;">Real fixtures · via football-data.org (Premier League, La Liga, Bundesliga, Serie A, Ligue 1)</p></div>'+
+    '<div class="daytabs" id="dayTabs">'+dayBtns.map(function(off){
+      var d = new Date(TODAY.getTime()+off*86400000);
+      var wk = d.toLocaleDateString([], {weekday:'short'});
+      var dn = d.getDate();
+      var active = APP.calDayOffset===off;
+      return '<button class="daytab '+(active?'active':'')+'" data-off="'+off+'">'+(off===0?'Today':wk)+'<b>'+dn+'</b></button>';
+    }).join('')+'</div>'+
+    '<div class="chiprow" id="calChips"><button class="chip active" data-f="all">All</button><button class="chip" data-f="myteams">My teams</button></div>'+
+    '<div class="cal-date-head" id="calDateHead"></div>'+
+    '<div id="calList" style="display:flex;flex-direction:column;gap:8px;"><p class="muted" style="padding:14px 0;">Loading real fixtures…</p></div>';
+  document.querySelectorAll('#dayTabs .daytab').forEach(function(b){
+    b.addEventListener('click', function(){ APP.calDayOffset = parseInt(b.getAttribute('data-off'),10); renderCalendar(); });
+  });
+  var selectedDate = new Date(TODAY.getTime()+APP.calDayOffset*86400000);
+  document.getElementById('calDateHead').textContent = dateHeadLabel(selectedDate);
+
+  ensureRealMatches().then(function(matches){
+    var chipsEl = document.getElementById('calChips');
+    if(chipsEl){
+      var comps = unique(matches.map(function(m){return m.comp;}));
+      var filters = ['all','myteams'].concat(comps);
+      chipsEl.innerHTML = filters.map(function(f){
+        var label = f==='all' ? 'All' : (f==='myteams' ? 'My teams' : f);
+        return '<button class="chip '+(APP.calFilter===f?'active':'')+'" data-f="'+escapeHTML(f)+'">'+escapeHTML(label)+'</button>';
+      }).join('');
+      chipsEl.querySelectorAll('.chip').forEach(function(c){
+        c.addEventListener('click', function(){ APP.calFilter = c.getAttribute('data-f'); renderCalendar(); });
+      });
+    }
+    var listEl = document.getElementById('calList');
+    if(!listEl) return;
+    var dateKey = selectedDate.toDateString();
+    var list = matches.filter(function(m){ return m.date.toDateString()===dateKey; });
+    if(APP.calFilter==='myteams'){
+      list = list.filter(function(m){ return teamNameMatchesProfile(m.home) || teamNameMatchesProfile(m.away); });
+    } else if(APP.calFilter && APP.calFilter!=='all' && APP.calFilter!=='myteams'){
+      list = list.filter(function(m){ return m.comp===APP.calFilter; });
+    }
+    list.sort(function(a,b){return a.date-b.date;});
+    if(list.length===0){
+      listEl.innerHTML = '<div class="empty">'+icon('calendar',34)+'<p><b>No real fixtures on this day.</b></p><p class="muted">Covers the big five leagues only — try another day, or this could be an international break.</p></div>';
+      return;
+    }
+    listEl.innerHTML = list.map(realMatchRowHTML).join('');
+    wireMatchDetailButtons(listEl);
+  });
+}
+function realMatchRowHTML(m){
+  return '<div class="match-row">'+
+    '<div class="match-comp">'+escapeHTML(m.comp)+'</div>'+
+    '<div class="match-core">'+
+      '<div class="match-team">'+realCrestHTML(m.homeCrest,m.home,24)+'<span>'+escapeHTML(m.home)+'</span></div>'+
+      (m.finished ? '<span class="match-score mono">'+m.score[0]+' – '+m.score[1]+'</span>' : '<span class="match-vs muted" style="font-size:12px;">vs</span>')+
+      '<div class="match-team" style="justify-content:flex-end;flex-direction:row-reverse;text-align:right;">'+realCrestHTML(m.awayCrest,m.away,24)+'<span>'+escapeHTML(m.away)+'</span></div>'+
+    '</div>'+
+    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">'+
+      '<span class="status-pill '+(m.finished?'fin':'up')+'">'+(m.finished?'Full-time':'Upcoming')+'</span>'+
+      '<span class="match-when">'+fmtDate(m.date)+'</span>'+
+      '<button class="btn sm ghost" data-view-detail="'+m.rawId+'" style="padding:3px 10px;font-size:11px;">Details</button>'+
+    '</div>'+
+  '</div>';
+}
+
 /* ============================ LEADERBOARD (online — 10 fixed bots, real players join as they sign up) ============================ */
 var lbMetric = 'overall';
 function loadLiveBoard(){ return load('tf_leaderboard_live', {}); }
@@ -1326,9 +1646,26 @@ function syncLeaderboardEntry(){
   board[APP.userKey] = {name:APP.user, quiz:myQuiz, pred:myPred, updatedAt:Date.now()};
   saveLiveBoard(board);
 }
+function syncLeaderboardEntryReal(matches){
+  if(!APP.userKey) return;
+  var board = loadLiveBoard();
+  var myQuiz = APP.quizHistory.reduce(function(s,h){return s+h.score;},0);
+  var myPred = realTotalPredictionPoints(matches);
+  board[APP.userKey] = {name:APP.user, quiz:myQuiz, pred:myPred, updatedAt:Date.now()};
+  saveLiveBoard(board);
+}
 function renderLeaderboard(){
+  if(hasBackend()){
+    paintLeaderboard(); /* paint immediately with whatever's cached so it's not blank */
+    ensureRealMatches().then(function(matches){ syncLeaderboardEntryReal(matches); paintLeaderboard(); });
+    return;
+  }
   syncLeaderboardEntry();
+  paintLeaderboard();
+}
+function paintLeaderboard(){
   var el = document.getElementById('view-leaderboard');
+  if(!el) return;
   var liveBoard = loadLiveBoard();
   var realRows = Object.keys(liveBoard).map(function(key){
     var u = liveBoard[key];
