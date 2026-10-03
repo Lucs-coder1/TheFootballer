@@ -718,7 +718,25 @@ function backendCall(action, payload){
     method:'POST',
     headers:{'Content-Type':'text/plain;charset=utf-8'}, /* avoids a CORS preflight against Apps Script */
     body: JSON.stringify(payload)
-  }).then(function(r){ return r.json(); });
+  }).then(function(r){
+    return r.text().then(function(txt){
+      var parsed;
+      try{ parsed = JSON.parse(txt); }
+      catch(e){
+        /* Not JSON back - usually means Apps Script returned an HTML page (a sign-in wall if
+           "Execute as" isn't set to "Me", or an error page) instead of our doPost/doGet output. */
+        var err = new Error('Backend returned non-JSON (HTTP '+r.status+'): '+txt.slice(0,160));
+        err.rawStatus = r.status; err.rawBody = txt;
+        throw err;
+      }
+      if(!r.ok){
+        var err2 = new Error('Backend HTTP '+r.status+': '+(parsed && parsed.error ? parsed.error : txt.slice(0,160)));
+        err2.rawStatus = r.status;
+        throw err2;
+      }
+      return parsed;
+    });
+  });
 }
 
 function initials(name){
@@ -943,9 +961,10 @@ function renderLiveScoresWidget(){
         '</div>';
       }).join('')+
     '</div>';
-  }).catch(function(){
+  }).catch(function(err){
     var listEl = document.getElementById('liveScoresList');
-    if(listEl) listEl.textContent = 'Could not reach the live scores backend.';
+    if(listEl) listEl.textContent = 'Could not reach the live scores backend. '+(err&&err.message?err.message:'');
+    try{ console.error('[liveScores]', err); }catch(e){}
   });
 }
 
