@@ -1,0 +1,1698 @@
+<title>TheFootballer</title>
+<style>
+/* ===== Design plan =====
+   Color: --navy (deep ground), --blue (primary accent), --sky (secondary accent),
+          --ink (text), --paper (page bg), --surface (card bg), --line (hairline), --muted (secondary text)
+   Type: --f-display (Anton, condensed sports headline), --f-body (Work Sans), --f-mono (JetBrains Mono, scores/stats)
+   Layout: app shell — fixed sidebar nav (desktop) / bottom tab bar (phone), sticky topbar, card-grid content column
+*/
+:root{
+  --navy:#0A1B3D; --blue:#1452D6; --sky:#4FA3FF;
+  --ink:#0E1C33; --paper:#F3F6FC; --surface:#FFFFFF; --line:#DCE6F7; --muted:#5B6B8C;
+  --good:#1E8F6F; --bad:#D6455A; --warn:#C98A1E;
+  --f-display:'Anton',"Arial Narrow",sans-serif;
+  --f-body:'Work Sans',system-ui,sans-serif;
+  --f-mono:'JetBrains Mono',ui-monospace,monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --navy:#060D1F; --blue:#5B93FF; --sky:#7FC1FF;
+    --ink:#E8EFFC; --paper:#081330; --surface:#0F2144; --line:#1E3864; --muted:#8CA3CC;
+    --good:#3FBF93; --bad:#FF6B7F; --warn:#E3A83E;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --navy:#060D1F; --blue:#5B93FF; --sky:#7FC1FF;
+  --ink:#E8EFFC; --paper:#081330; --surface:#0F2144; --line:#1E3864; --muted:#8CA3CC;
+  --good:#3FBF93; --bad:#FF6B7F; --warn:#E3A83E;
+  color-scheme: dark;
+}
+*{box-sizing:border-box;}
+[hidden]{display:none!important;}
+body{font-family:var(--f-body);background:var(--paper);color:var(--ink);min-height:100%;}
+h1,h2,h3,h4{font-family:var(--f-display);font-weight:400;letter-spacing:.3px;text-wrap:balance;margin:0;}
+p{margin:0;line-height:1.5;}
+button{font-family:inherit;cursor:pointer;}
+a{color:var(--blue);}
+.hairline{border:1px solid var(--line);}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums;}
+.muted{color:var(--muted);}
+::selection{background:var(--sky);color:#fff;}
+
+/* ---------- App shell ---------- */
+#app{min-height:100%;}
+.shell{display:flex;min-height:100%;}
+.sidebar{
+  width:224px;flex:none;background:var(--navy);color:#fff;
+  display:flex;flex-direction:column;gap:4px;padding:18px 14px;
+  position:sticky;top:0;align-self:flex-start;height:100vh;
+}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 10px 18px;color:#fff;}
+.brand svg{flex:none;}
+.brand b{font-family:var(--f-display);font-size:19px;letter-spacing:.5px;}
+.navitem{
+  display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;
+  background:transparent;border:none;color:#C9D8F5;text-align:left;font-size:14.5px;font-weight:600;
+}
+.navitem svg{flex:none;opacity:.9;}
+.navitem:hover{background:rgba(255,255,255,.08);color:#fff;}
+.navitem.active{background:var(--blue);color:#fff;}
+.sidebar .spacer{flex:1;}
+.sidebar .meta{padding:10px 12px;color:#7F96C9;font-size:12px;}
+
+.topbar{
+  position:sticky;top:env(safe-area-inset-top,0px);z-index:5;
+  display:flex;align-items:center;gap:12px;padding:12px 20px;
+  background:var(--surface);border-bottom:1px solid var(--line);
+}
+.topbar .page-title{font-size:20px;flex:1;min-width:0;}
+.iconbtn{
+  display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;
+  background:transparent;border:1px solid var(--line);color:var(--ink);flex:none;
+}
+.iconbtn:hover{border-color:var(--blue);color:var(--blue);}
+.chip-user{
+  display:flex;align-items:center;gap:8px;padding:6px 12px 6px 6px;border-radius:999px;
+  background:var(--paper);border:1px solid var(--line);flex:none;
+}
+.avatar{
+  width:28px;height:28px;border-radius:999px;background:var(--blue);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;
+}
+.main{flex:1;min-width:0;padding:22px 24px 90px;max-width:1080px;margin:0 auto;width:100%;}
+.view{display:flex;flex-direction:column;gap:22px;}
+
+.bottomnav{
+  display:none;position:fixed;bottom:0;left:0;right:0;z-index:6;
+  background:var(--surface);border-top:1px solid var(--line);
+  padding:8px 6px calc(8px + env(safe-area-inset-bottom,0px));
+  justify-content:space-between;gap:2px;
+}
+.bottomnav button{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+  background:none;border:none;color:var(--muted);font-size:10.5px;font-weight:600;padding:4px 2px;border-radius:8px;min-width:0;
+}
+.bottomnav button.active{color:var(--blue);}
+
+@media (max-width:900px){
+  .sidebar{display:none;}
+  .bottomnav{display:flex;}
+  .main{padding:16px 14px 90px;}
+}
+
+/* ---------- Section headers / layout bits ---------- */
+.section-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.section-head h2{font-size:24px;}
+.tabs{display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;width:max-content;}
+.tabs button{background:none;border:none;border-radius:9px;padding:8px 16px;font-size:13.5px;font-weight:700;color:var(--muted);}
+.tabs button.active{background:var(--blue);color:#fff;}
+.chiprow{display:flex;gap:8px;flex-wrap:wrap;}
+.chip{
+  padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);
+  font-size:12.5px;font-weight:600;color:var(--muted);
+}
+.chip.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0;}
+.empty{
+  border:1.5px dashed var(--line);border-radius:14px;padding:32px 20px;text-align:center;
+  display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--muted);
+}
+.empty svg{opacity:.5;}
+
+/* ---------- Buttons / forms ---------- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:11px 20px;border-radius:10px;border:none;font-weight:700;font-size:14px;
+  background:var(--blue);color:#fff;
+}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+.btn.ghost{background:transparent;color:var(--blue);border:1.5px solid var(--blue);}
+.btn.subtle{background:var(--paper);color:var(--ink);border:1px solid var(--line);}
+.btn.sm{padding:7px 14px;font-size:12.5px;}
+.btn.block{width:100%;}
+input[type=text],input[type=number],input[type=password],select{
+  font-family:inherit;font-size:14px;padding:10px 12px;border-radius:9px;border:1.5px solid var(--line);
+  background:var(--surface);color:var(--ink);width:100%;
+}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--sky);outline-offset:1px;}
+label.field{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700;color:var(--muted);}
+
+/* ---------- Onboarding / Auth ---------- */
+.onboarding{min-height:100%;display:flex;align-items:center;justify-content:center;padding:28px 18px;background:
+  radial-gradient(1200px 500px at 50% -10%, color-mix(in srgb, var(--blue) 18%, transparent), transparent),var(--navy);}
+.ob-card{width:100%;max-width:480px;background:var(--surface);border-radius:20px;padding:28px 26px 26px;box-shadow:0 30px 60px -20px rgba(0,0,0,.4);}
+.ob-logo{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:18px;color:var(--navy);}
+.ob-logo b{font-family:var(--f-display);font-size:24px;}
+.ob-progress{display:flex;gap:6px;margin-bottom:20px;}
+.ob-progress i{flex:1;height:5px;border-radius:999px;background:var(--line);display:block;}
+.ob-progress i.on{background:var(--blue);}
+.ob-step h3{font-size:21px;margin-bottom:4px;}
+.ob-step p.sub{color:var(--muted);font-size:13.5px;margin-bottom:16px;}
+.pickgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:340px;overflow-y:auto;padding:2px;margin-bottom:6px;}
+.pickgrid.single{grid-template-columns:1fr 1fr 1fr;}
+.pickitem{
+  display:flex;align-items:center;gap:8px;padding:10px;border-radius:11px;border:1.5px solid var(--line);
+  background:var(--paper);font-size:12.5px;font-weight:700;color:var(--ink);text-align:left;
+}
+.pickitem small{display:block;font-weight:500;color:var(--muted);font-size:10.5px;}
+.pickitem.sel{border-color:var(--blue);background:color-mix(in srgb, var(--blue) 10%, var(--surface));}
+.pickitem .crest{width:26px;height:26px;flex:none;}
+.ob-actions{display:flex;justify-content:space-between;gap:10px;margin-top:18px;}
+.ob-counter{font-size:11.5px;color:var(--muted);text-align:right;margin-bottom:8px;}
+.ob-error{color:var(--bad);font-size:12.5px;font-weight:600;min-height:16px;}
+.ob-hint{font-size:11.5px;color:var(--muted);margin-top:14px;line-height:1.5;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
+.authtabs{display:flex;gap:6px;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:18px;}
+.authtabs button{flex:1;background:none;border:none;border-radius:9px;padding:9px 0;font-size:13.5px;font-weight:700;color:var(--muted);}
+.authtabs button.active{background:var(--blue);color:#fff;}
+.ob-step label.field{margin-bottom:12px;}
+
+/* ---------- News ---------- */
+.news-card{overflow:hidden;padding:0;}
+.news-art{height:108px;position:relative;display:flex;align-items:flex-end;padding:10px 12px;overflow:hidden;}
+.news-art span.tag{
+  background:rgba(10,20,40,.55);color:#fff;font-size:10.5px;font-weight:700;letter-spacing:.4px;
+  text-transform:uppercase;padding:4px 9px;border-radius:999px;backdrop-filter:blur(2px);
+}
+.news-crests{position:absolute;top:10px;right:10px;display:flex;align-items:center;}
+.news-crests > :nth-child(2){margin-left:-10px;}
+.news-iconwm{position:absolute;top:6px;right:8px;opacity:.28;color:#fff;}
+.news-body{padding:13px 14px 15px;display:flex;flex-direction:column;gap:7px;}
+.news-body h4{font-size:15.5px;line-height:1.3;}
+.news-body p{font-size:13px;color:var(--muted);}
+.news-foot{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-top:2px;}
+.news-foot b{color:var(--blue);}
+
+/* ---------- Tutorials ---------- */
+.tut-card{cursor:pointer;}
+.tut-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;}
+.badge{padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:.3px;}
+.badge.lvl-Beginner{background:color-mix(in srgb, var(--good) 18%, var(--surface));color:var(--good);}
+.badge.lvl-Intermediate{background:color-mix(in srgb, var(--warn) 18%, var(--surface));color:var(--warn);}
+.badge.lvl-Advanced{background:color-mix(in srgb, var(--bad) 18%, var(--surface));color:var(--bad);}
+.playcircle{width:46px;height:46px;border-radius:999px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;flex:none;}
+.tut-prog{height:5px;border-radius:999px;background:var(--line);overflow:hidden;}
+.tut-prog b{display:block;height:100%;background:var(--blue);}
+
+/* ---------- Modal ---------- */
+.modal-wrap{position:fixed;inset:0;z-index:30;display:flex;align-items:flex-end;justify-content:center;background:rgba(6,12,26,.5);padding:0;}
+@media (min-width:640px){.modal-wrap{align-items:center;padding:20px;}}
+.modal{
+  background:var(--surface);width:100%;max-width:560px;max-height:88vh;overflow-y:auto;
+  border-radius:18px 18px 0 0;padding:22px 22px calc(24px + env(safe-area-inset-bottom,0px));
+  display:flex;flex-direction:column;gap:14px;
+}
+@media (min-width:640px){.modal{border-radius:18px;}}
+.modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.modal-head h3{font-size:20px;}
+.step-row{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line);}
+.step-row:first-of-type{border-top:none;}
+.step-check{
+  width:24px;height:24px;border-radius:999px;border:1.5px solid var(--line);flex:none;margin-top:1px;
+  display:flex;align-items:center;justify-content:center;color:#fff;
+}
+.step-check.on{background:var(--good);border-color:var(--good);}
+.cue{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--muted);}
+.cue b{color:var(--ink);}
+
+/* ---------- Quiz ---------- */
+.quiz-hero{background:var(--navy);color:#fff;border-radius:16px;padding:26px 22px;display:flex;flex-direction:column;gap:14px;}
+.quiz-hero h3{font-size:24px;color:#fff;}
+.quiz-stat-row{display:flex;gap:18px;flex-wrap:wrap;}
+.quiz-stat{display:flex;flex-direction:column;gap:2px;}
+.quiz-stat b{font-family:var(--f-mono);font-size:20px;}
+.quiz-stat span{font-size:11px;color:#9FB4E0;text-transform:uppercase;letter-spacing:.4px;}
+.qcatrow{display:flex;align-items:center;gap:7px;color:#9FB4E0;font-size:11.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;}
+.qbar{height:6px;border-radius:999px;background:rgba(255,255,255,.15);overflow:hidden;}
+.qbar b{display:block;height:100%;background:var(--blue);transition:width .25s;}
+.timer-row{display:flex;align-items:center;gap:10px;}
+.timer-num{font-family:var(--f-mono);font-weight:700;font-size:15px;color:#fff;min-width:30px;text-align:right;flex:none;}
+.timerbar{flex:1;height:8px;border-radius:999px;background:rgba(255,255,255,.15);overflow:hidden;}
+.timerbar b{display:block;height:100%;background:var(--sky);}
+.qtext{font-size:19px;line-height:1.35;}
+.qopt{
+  display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:12px;border:1.5px solid var(--line);
+  background:var(--surface);text-align:left;font-size:14px;font-weight:600;width:100%;
+}
+.qopt .letter{width:24px;height:24px;border-radius:7px;background:var(--paper);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--muted);flex:none;}
+.qopt.correct{border-color:var(--good);background:color-mix(in srgb, var(--good) 12%, var(--surface));}
+.qopt.wrong{border-color:var(--bad);background:color-mix(in srgb, var(--bad) 12%, var(--surface));}
+.qopt:disabled{cursor:default;}
+.qfeedback{font-size:13.5px;font-weight:700;padding:11px 14px;border-radius:12px;}
+.qfeedback.good{background:color-mix(in srgb, var(--good) 15%, var(--surface));color:var(--good);}
+.qfeedback.bad{background:color-mix(in srgb, var(--bad) 14%, var(--surface));color:var(--bad);}
+
+/* ---------- Predictions ---------- */
+.pred-row{display:flex;align-items:center;gap:12px;padding:14px 0;border-top:1px solid var(--line);flex-wrap:wrap;}
+.pred-row:first-of-type{border-top:none;}
+.pred-teams{display:flex;align-items:center;gap:10px;flex:1;min-width:220px;}
+.pred-team{display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:700;min-width:0;}
+.pred-team span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pred-vs{color:var(--muted);font-size:11px;}
+.pred-inputs{display:flex;align-items:center;gap:6px;}
+.pred-inputs input{width:44px;text-align:center;padding:8px 2px;}
+.pred-pts{font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;white-space:nowrap;}
+.pred-pts.tier-great{background:color-mix(in srgb, var(--good) 20%, var(--surface));color:var(--good);}
+.pred-pts.tier-good{background:color-mix(in srgb, var(--blue) 16%, var(--surface));color:var(--blue);}
+.pred-pts.tier-low{background:color-mix(in srgb, var(--warn) 18%, var(--surface));color:var(--warn);}
+.pred-pts.tier-miss{background:color-mix(in srgb, var(--bad) 14%, var(--surface));color:var(--bad);}
+.pred-meta{font-size:11px;color:var(--muted);width:100%;}
+
+/* ---------- Calendar ---------- */
+.daytabs{display:flex;gap:7px;overflow-x:auto;padding:2px 2px 6px;}
+.daytab{flex:none;min-width:56px;padding:8px 6px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);text-align:center;font-size:11px;font-weight:700;color:var(--muted);}
+.daytab b{display:block;font-size:16px;font-family:var(--f-mono);color:var(--ink);margin-top:2px;}
+.daytab.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+.daytab.active b{color:#fff;}
+.cal-date-head{font-size:13px;font-weight:700;color:var(--ink);margin:2px 0 2px;}
+.match-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;flex-wrap:wrap;}
+.match-comp{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;width:100%;}
+.match-core{display:flex;align-items:center;gap:10px;flex:1;min-width:240px;}
+.match-team{display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:700;flex:1;min-width:0;}
+.match-team span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.match-score{font-family:var(--f-mono);font-size:16px;font-weight:700;white-space:nowrap;}
+.match-when{font-size:11.5px;color:var(--muted);white-space:nowrap;min-width:92px;text-align:right;}
+.status-pill{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;text-transform:uppercase;}
+.status-pill.fin{background:var(--paper);color:var(--muted);}
+.status-pill.up{background:color-mix(in srgb, var(--blue) 15%, var(--surface));color:var(--blue);}
+
+/* ---------- Leaderboard ---------- */
+.lb-row{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--line);}
+.lb-row.me{border-color:var(--blue);background:color-mix(in srgb, var(--blue) 8%, var(--surface));}
+.lb-rank{width:26px;text-align:center;font-family:var(--f-mono);font-weight:700;color:var(--muted);flex:none;}
+.lb-rank.top3{color:var(--blue);}
+.lb-name{flex:1;min-width:0;font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:8px;}
+.lb-name span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lb-pts{font-family:var(--f-mono);font-weight:700;font-size:14.5px;}
+.bottag{font-size:9px;font-weight:800;letter-spacing:.3px;padding:2px 6px;border-radius:999px;background:var(--line);color:var(--muted);flex:none;}
+
+/* ---------- Profile ---------- */
+.profile-head{display:flex;align-items:center;gap:14px;}
+.profile-head .avatar{width:56px;height:56px;font-size:19px;}
+.taglist{display:flex;flex-wrap:wrap;gap:7px;}
+.tag{display:flex;align-items:center;gap:6px;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:6px 12px 6px 7px;font-size:12.5px;font-weight:700;}
+</style>
+
+<div id="app">
+  <div id="onboarding" class="onboarding"></div>
+
+  <div id="shell" class="shell" hidden>
+    <aside class="sidebar">
+      <div class="brand">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.3 16 10l-1.5 4.7h-5L8 10z"/><path d="M12 2.5v4.8M3.3 9.2l4.7.8M3.3 14.8l4.7-.8M20.7 9.2l-4.7.8M20.7 14.8l-4.7-.8M12 21.5v-4.8"/></svg>
+        <b>TheFootballer</b>
+      </div>
+      <nav id="sidenav"></nav>
+      <div class="spacer"></div>
+      <div class="meta">⚡ Live-ish since kickoff</div>
+    </aside>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+      <header class="topbar">
+        <h1 class="page-title" id="pageTitle">Home</h1>
+        <button class="iconbtn" id="themeToggle" title="Toggle theme" aria-label="Toggle theme"></button>
+        <button class="chip-user" id="profileChip">
+          <span class="avatar" id="userAvatar">?</span>
+          <span id="userNameChip" style="font-size:13px;font-weight:700;"></span>
+        </button>
+      </header>
+      <main class="main">
+        <section id="view-home" class="view"></section>
+        <section id="view-tutorials" class="view" hidden></section>
+        <section id="view-quiz" class="view" hidden></section>
+        <section id="view-predictions" class="view" hidden></section>
+        <section id="view-calendar" class="view" hidden></section>
+        <section id="view-leaderboard" class="view" hidden></section>
+        <section id="view-profile" class="view" hidden></section>
+      </main>
+    </div>
+
+    <nav class="bottomnav" id="bottomnav"></nav>
+  </div>
+
+  <div id="modal-root"></div>
+</div>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Work+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+<script>
+(function(){
+"use strict";
+
+/* ============================ ICONS ============================ */
+var ICONS = {
+  home:'<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M9.5 20v-6h5v6"/>',
+  tutorials:'<path d="M12 5 3 9l9 4 9-4-9-4Z"/><path d="M7 11v5.2c0 .5 2.2 2.3 5 2.3s5-1.8 5-2.3V11"/>',
+  quiz:'<circle cx="12" cy="12" r="9.5"/><path d="M9.3 9.4a2.7 2.7 0 1 1 3.8 2.5c-.7.5-1.1 1-1.1 2.1"/><circle cx="12" cy="17" r=".4" fill="currentColor"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/>',
+  calendar:'<rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/>',
+  trophy:'<path d="M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M7 6H4.5A2.5 2.5 0 0 0 5.8 10.6M17 6h2.5A2.5 2.5 0 0 1 18.2 10.6"/><path d="M12 14v3M9 21h6M9.5 21c0-2 1-2.6 2.5-2.6s2.5.6 2.5 2.6"/>',
+  user:'<circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 20c.9-3.4 3.8-5.2 7.2-5.2s6.3 1.8 7.2 5.2"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  chevron:'<path d="m9 6 6 6-6 6"/>',
+  check:'<path d="m5 13 4.5 4.5L19 8"/>',
+  close:'<path d="M6 6l12 12M18 6 6 18"/>',
+  play:'<path d="M8 5.5v13l11-6.5z"/>',
+  sun:'<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+  moon:'<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/>',
+  star:'<path d="M12 3.3 14.6 9l6.2.6-4.6 4.2 1.3 6.1-5.5-3.2-5.5 3.2 1.3-6.1-4.6-4.2L9.4 9Z"/>',
+  medal:'<circle cx="12" cy="15" r="5.3"/><path d="M12 12v6M9.3 14.3l5.4 1.6M14.7 14.3l-5.4 1.6"/><path d="M8.3 4h7.4l-2.3 7.3h-2.8Z"/>',
+  book:'<path d="M4 5.3c2.6-1 5.7-1 8.2 0v13.4c-2.5-1-5.6-1-8.2 0Z"/><path d="M20.2 5.3c-2.6-1-5.7-1-8.2 0v13.4c2.5-1 5.6-1 8.2 0Z"/>',
+  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.4 2.6 15.6 0 18M12 3c-2.6 2.4-2.6 15.6 0 18"/>',
+  lock:'<rect x="5" y="11" width="14" height="9" rx="2.2"/><path d="M8 11V7.6a4 4 0 0 1 8 0V11"/>',
+  logout:'<path d="M9 21H5.5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2H9"/><path d="M16 16.5 21 12l-5-4.5"/><path d="M21 12H9"/>'
+};
+function icon(name,size){ size=size||20; return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+ICONS[name]+'</svg>'; }
+
+/* ============================ TEAMS / LEAGUES ============================ */
+var TEAMS = [
+  {id:'ARS',name:'Arsenal',country:'England',comp:'Premier League',venue:'Emirates Stadium'},
+  {id:'MCI',name:'Manchester City',country:'England',comp:'Premier League',venue:'Etihad Stadium'},
+  {id:'MUN',name:'Manchester United',country:'England',comp:'Premier League',venue:'Old Trafford'},
+  {id:'LIV',name:'Liverpool',country:'England',comp:'Premier League',venue:'Anfield'},
+  {id:'CHE',name:'Chelsea',country:'England',comp:'Premier League',venue:'Stamford Bridge'},
+  {id:'TOT',name:'Tottenham Hotspur',country:'England',comp:'Premier League',venue:'Tottenham Hotspur Stadium'},
+  {id:'RMA',name:'Real Madrid',country:'Spain',comp:'La Liga',venue:'Santiago Bernabéu'},
+  {id:'BAR',name:'FC Barcelona',country:'Spain',comp:'La Liga',venue:'Estadi Olímpic Lluís Companys'},
+  {id:'ATM',name:'Atlético Madrid',country:'Spain',comp:'La Liga',venue:'Cívitas Metropolitano'},
+  {id:'BAY',name:'Bayern Munich',country:'Germany',comp:'Bundesliga',venue:'Allianz Arena'},
+  {id:'BVB',name:'Borussia Dortmund',country:'Germany',comp:'Bundesliga',venue:'Signal Iduna Park'},
+  {id:'JUV',name:'Juventus',country:'Italy',comp:'Serie A',venue:'Allianz Stadium'},
+  {id:'MIL',name:'AC Milan',country:'Italy',comp:'Serie A',venue:'San Siro'},
+  {id:'INT',name:'Inter Milan',country:'Italy',comp:'Serie A',venue:'San Siro'},
+  {id:'PSG',name:'Paris Saint-Germain',country:'France',comp:'Ligue 1',venue:'Parc des Princes'},
+  {id:'OM',name:'Olympique de Marseille',country:'France',comp:'Ligue 1',venue:'Stade Vélodrome'},
+  {id:'SLB',name:'Benfica',country:'Portugal',comp:'Primeira Liga',venue:'Estádio da Luz'},
+  {id:'POR',name:'FC Porto',country:'Portugal',comp:'Primeira Liga',venue:'Estádio do Dragão'},
+  {id:'SCP',name:'Sporting CP',country:'Portugal',comp:'Primeira Liga',venue:'Estádio José Alvalade'},
+  {id:'AJA',name:'Ajax',country:'Netherlands',comp:'Eredivisie',venue:'Johan Cruyff Arena'},
+  {id:'BOC',name:'Boca Juniors',country:'Argentina',comp:'Liga Profesional',venue:'La Bombonera'},
+  {id:'RIV',name:'River Plate',country:'Argentina',comp:'Liga Profesional',venue:'Estadio Monumental'},
+  {id:'FLA',name:'Flamengo',country:'Brazil',comp:'Brasileirão',venue:'Maracanã'},
+  {id:'PAL',name:'Palmeiras',country:'Brazil',comp:'Brasileirão',venue:'Allianz Parque'},
+  {id:'CEL',name:'Celtic',country:'Scotland',comp:'Scottish Premiership',venue:'Celtic Park'},
+  {id:'RAN',name:'Rangers',country:'Scotland',comp:'Scottish Premiership',venue:'Ibrox Stadium'},
+  {id:'CLB',name:'Club Brugge',country:'Belgium',comp:'Belgian Pro League',venue:'Jan Breydel Stadium'},
+  {id:'AND',name:'Anderlecht',country:'Belgium',comp:'Belgian Pro League',venue:'Lotto Park'},
+  {id:'GAL',name:'Galatasaray',country:'Turkey',comp:'Süper Lig',venue:'Rams Park'},
+  {id:'FEN',name:'Fenerbahçe',country:'Turkey',comp:'Süper Lig',venue:'Şükrü Saracoğlu Stadium'},
+  {id:'HIL',name:'Al Hilal',country:'Saudi Arabia',comp:'Saudi Pro League',venue:'Kingdom Arena'},
+  {id:'NAS',name:'Al Nassr',country:'Saudi Arabia',comp:'Saudi Pro League',venue:'Al-Awwal Park'},
+  {id:'MIA',name:'Inter Miami CF',country:'USA',comp:'MLS',venue:'Chase Stadium'},
+  {id:'LAG',name:'LA Galaxy',country:'USA',comp:'MLS',venue:'Dignity Health Sports Park'},
+  {id:'AME',name:'Club América',country:'Mexico',comp:'Liga MX',venue:'Estadio Azteca'},
+  {id:'CHV',name:'Chivas de Guadalajara',country:'Mexico',comp:'Liga MX',venue:'Estadio Akron'},
+  {id:'WAC',name:'Wydad AC',country:'Morocco',comp:'Botola Pro',venue:'Stade Mohammed V'},
+  {id:'RAJ',name:'Raja Casablanca',country:'Morocco',comp:'Botola Pro',venue:'Stade Mohammed V'},
+  {id:'EAH',name:'Al Ahly',country:'Egypt',comp:'Egyptian Premier League',venue:'Cairo International Stadium'},
+  {id:'ZAM',name:'Zamalek',country:'Egypt',comp:'Egyptian Premier League',venue:'Cairo International Stadium'},
+  {id:'URA',name:'Urawa Red Diamonds',country:'Japan',comp:'J1 League',venue:'Saitama Stadium 2002'},
+  {id:'KAW',name:'Kawasaki Frontale',country:'Japan',comp:'J1 League',venue:'Todoroki Stadium'},
+  {id:'ULS',name:'Ulsan HD',country:'South Korea',comp:'K League 1',venue:'Ulsan Munsu Football Stadium'},
+  {id:'JEO',name:'Jeonbuk Hyundai Motors',country:'South Korea',comp:'K League 1',venue:'Jeonju World Cup Stadium'},
+  {id:'PEN',name:'Peñarol',country:'Uruguay',comp:'Uruguayan Primera División',venue:'Estadio Campeón del Siglo'},
+  {id:'NAC',name:'Nacional',country:'Uruguay',comp:'Uruguayan Primera División',venue:'Gran Parque Central'},
+  {id:'CLC',name:'Colo-Colo',country:'Chile',comp:'Chilean Primera División',venue:'Estadio Monumental David Arellano'},
+  {id:'UCH',name:'Universidad de Chile',country:'Chile',comp:'Chilean Primera División',venue:'Estadio Nacional'},
+  {id:'DIN',name:'Dinamo Zagreb',country:'Croatia',comp:'Croatian HNL',venue:'Stadion Maksimir'},
+  {id:'HAJ',name:'Hajduk Split',country:'Croatia',comp:'Croatian HNL',venue:'Stadion Poljud'},
+  {id:'OLY',name:'Olympiacos',country:'Greece',comp:'Greek Super League',venue:'Karaiskakis Stadium'},
+  {id:'PAO',name:'Panathinaikos',country:'Greece',comp:'Greek Super League',venue:'OPAP Arena'}
+];
+var TEAM_BY_ID = {}; TEAMS.forEach(function(t){ TEAM_BY_ID[t.id]=t; });
+var COUNTRIES = unique(TEAMS.map(function(t){return t.country;}));
+var COMPETITIONS = unique(TEAMS.map(function(t){return t.comp;})).concat(['Champions League','Europa League','Copa Libertadores']);
+function unique(arr){ var seen={}, out=[]; arr.forEach(function(v){ if(!seen[v]){seen[v]=1; out.push(v);} }); return out; }
+
+/* ============================ FIXTURE GENERATION ============================ */
+var RIVALRIES = [
+  {comp:'Premier League',a:'ARS',b:'TOT',trip:true}, {comp:'Premier League',a:'MCI',b:'MUN',trip:true},
+  {comp:'Premier League',a:'LIV',b:'CHE',trip:true}, {comp:'Premier League',a:'MUN',b:'LIV',trip:true},
+  {comp:'La Liga',a:'RMA',b:'BAR',trip:true}, {comp:'La Liga',a:'ATM',b:'RMA',trip:true}, {comp:'La Liga',a:'BAR',b:'ATM',trip:true},
+  {comp:'Bundesliga',a:'BAY',b:'BVB',trip:true},
+  {comp:'Serie A',a:'INT',b:'MIL',trip:true}, {comp:'Serie A',a:'JUV',b:'INT',trip:true},
+  {comp:'Ligue 1',a:'PSG',b:'OM',trip:true},
+  {comp:'Primeira Liga',a:'SLB',b:'POR',trip:true}, {comp:'Primeira Liga',a:'SCP',b:'SLB',trip:true},
+  {comp:'Liga Profesional',a:'BOC',b:'RIV',trip:false},
+  {comp:'Brasileirão',a:'FLA',b:'PAL',trip:false},
+  {comp:'Scottish Premiership',a:'CEL',b:'RAN',trip:false},
+  {comp:'Belgian Pro League',a:'CLB',b:'AND',trip:false},
+  {comp:'Süper Lig',a:'GAL',b:'FEN',trip:false},
+  {comp:'Saudi Pro League',a:'HIL',b:'NAS',trip:false},
+  {comp:'MLS',a:'MIA',b:'LAG',trip:false},
+  {comp:'Liga MX',a:'AME',b:'CHV',trip:false},
+  {comp:'Botola Pro',a:'WAC',b:'RAJ',trip:false},
+  {comp:'Egyptian Premier League',a:'EAH',b:'ZAM',trip:false},
+  {comp:'J1 League',a:'URA',b:'KAW',trip:false},
+  {comp:'K League 1',a:'ULS',b:'JEO',trip:false},
+  {comp:'Uruguayan Primera División',a:'PEN',b:'NAC',trip:false},
+  {comp:'Chilean Primera División',a:'CLC',b:'UCH',trip:false},
+  {comp:'Croatian HNL',a:'DIN',b:'HAJ',trip:false},
+  {comp:'Greek Super League',a:'OLY',b:'PAO',trip:false}
+];
+var CONTINENTAL = [
+  {comp:'Champions League',a:'RMA',b:'MCI'}, {comp:'Champions League',a:'BAY',b:'ARS'},
+  {comp:'Champions League',a:'PSG',b:'LIV'}, {comp:'Champions League',a:'CEL',b:'CLB'},
+  {comp:'Europa League',a:'AJA',b:'TOT'}, {comp:'Europa League',a:'MUN',b:'AJA'}, {comp:'Europa League',a:'GAL',b:'OLY'},
+  {comp:'Copa Libertadores',a:'FLA',b:'BOC'}, {comp:'Copa Libertadores',a:'RIV',b:'PAL'}
+];
+
+var TODAY = new Date(); TODAY.setHours(12,0,0,0);
+function hashStr(s){ var h=0; for(var i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))|0; } return Math.abs(h); }
+function genScore(seed){
+  var weights=[0,0,1,1,1,2,2,3,4];
+  var h1=hashStr(seed+'~h'), h2=hashStr(seed+'~a');
+  return [weights[h1%weights.length], weights[h2%weights.length]];
+}
+var PAST_POOL=[-1,-2,-3,-4,-5,-6,-7,-9,-11,-14,-18,-22];
+var FUTURE_POOL=[0,1,2,3,4,5,6,8,10,13,16,20,24,28];
+
+var MATCHES = (function(){
+  var out=[], mi=0, pastI=0, futI=0;
+  function add(comp,home,away,offset){
+    var d = new Date(TODAY.getTime()+offset*86400000);
+    var id='M'+mi; mi++;
+    var finished = offset<=0;
+    out.push({id:id,comp:comp,home:home,away:away,date:d,venue:TEAM_BY_ID[home].venue,finished:finished,score:finished?genScore(id):null});
+  }
+  RIVALRIES.forEach(function(r){
+    if(r.trip){
+      add(r.comp,r.a,r.b,FUTURE_POOL[futI%FUTURE_POOL.length]); futI++;
+      add(r.comp,r.b,r.a,PAST_POOL[pastI%PAST_POOL.length]); pastI++;
+    } else {
+      if(pastI%2===0){ add(r.comp,r.b,r.a,PAST_POOL[pastI%PAST_POOL.length]); pastI++; }
+      else { add(r.comp,r.b,r.a,FUTURE_POOL[futI%FUTURE_POOL.length]); futI++; }
+    }
+  });
+  CONTINENTAL.forEach(function(c,i){
+    if(i%2===0){ add(c.comp,c.a,c.b,FUTURE_POOL[(futI+i)%FUTURE_POOL.length]); }
+    else { add(c.comp,c.a,c.b,PAST_POOL[(pastI+i)%PAST_POOL.length]); }
+  });
+  return out;
+})();
+
+/* ============================ TUTORIALS ============================ */
+var TUTORIALS = [
+  {id:'t1',title:'First Touch Under Pressure',cat:'Ball Control',level:'Beginner',min:8,
+   cue:'Soften the ankle on contact — a "stiff" foot sends the ball away from you, not into your stride.',
+   steps:['Receive side-on, never square to the pass, so you can see the pitch and the pressure at once.',
+     'Cushion the ball by withdrawing the receiving foot slightly on contact.',
+     'Aim your first touch into space away from the nearest defender, not straight down at your feet.',
+     'Repeat against a wall at increasing pace — 3 sets of 20 touches, alternating feet.']},
+  {id:'t2',title:'The Cruyff Turn',cat:'Dribbling',level:'Intermediate',min:6,
+   cue:'The disguise is in the eyes and hips — sell the pass before you drag the ball back through your standing leg.',
+   steps:['Approach as if about to pass or cross with the inside of your foot.',
+     'At the last moment, drag the ball behind your standing leg with the inside of the striking foot.',
+     'Pivot your hips 180° in the same motion so you are already facing the new direction.',
+     'Accelerate away on the first touch — the turn is wasted if the exit is slow.']},
+  {id:'t3',title:'Driven Low Cross',cat:'Passing',level:'Intermediate',min:7,
+   cue:'Strike through the ball\'s equator, not underneath it — height kills pace and gives the defense time to recover.',
+   steps:['Plant the standing foot level with the ball, pointing at the target zone.',
+     'Lock the ankle and strike the middle of the ball with the laces.',
+     'Keep the follow-through low to flatten the trajectory.',
+     'Aim for the penalty spot or the near six-yard box, not deep into the box.']},
+  {id:'t4',title:'Reading the Offside Line',cat:'Defending',level:'Advanced',min:9,
+   cue:'Step up together, not one at a time — a single slow defender is what breaks the line.',
+   steps:['Keep the back four talking constantly — one voice calls the step up.',
+     'Watch the passer\'s hips and body shape, not the ball, to anticipate the pass.',
+     'Push up as a unit the instant the ball is played forward, not after.',
+     'Practice with a coach calling random pass moments while the line steps in sync.']},
+  {id:'t5',title:'Near-Post Finishing',cat:'Shooting',level:'Beginner',min:5,
+   cue:'Most keepers set for the far post by habit — a firm, low near-post strike beats them early.',
+   steps:['Take the touch across your body to open the near-post angle.',
+     'Strike with the inside of the foot for accuracy over power.',
+     'Keep the shot low — a near-post finish above waist height is an easy save.',
+     'Finish 10 reps from each flank, alternating feet.']},
+  {id:'t6',title:'Inswinging Corner Delivery',cat:'Set Pieces',level:'Intermediate',min:7,
+   cue:'The seam of the ball and the angle of your plant foot decide the curl more than raw power.',
+   steps:['Approach from a wide angle, roughly 30–40° to the byline.',
+     'Strike the outside-bottom third of the ball with the instep.',
+     'Aim the flight to arrive between the penalty spot and the six-yard line.',
+     'Vary pace with a teammate so attackers learn to time runs, not just read the ball.']},
+  {id:'t7',title:'Goalkeeper Footwork & Positioning',cat:'Goalkeeping',level:'Beginner',min:8,
+   cue:'Small adjustment steps keep you balanced — big crossover strides leave you flat-footed when the shot comes.',
+   steps:['Stay on the balls of your feet with knees soft, never flat-footed.',
+     'Use short shuffle steps to adjust your angle as the ball moves.',
+     'Narrow the shooting angle by stepping out as the attacker closes in.',
+     'Set your base just before the strike — don\'t still be moving when the ball is hit.']},
+  {id:'t8',title:'Aerobic Base Training',cat:'Fitness',level:'Advanced',min:10,
+   cue:'Match running is mostly aerobic — the sprints get the attention, but the engine is built in week after week of base work.',
+   steps:['Build a weekly long run or bike session at a conversational pace.',
+     'Add 2 interval sessions: 4x4 minutes hard with 3 minutes easy between.',
+     'Include a recovery day with light technical work only, no conditioning.',
+     'Track resting heart rate each morning as a simple fatigue check.']},
+  {id:'t9',title:'The Rabona: When and How',cat:'Dribbling',level:'Advanced',min:6,
+   cue:'It\'s a last resort, not a show move — only reach for it when your standing leg genuinely can\'t get to the ball.',
+   steps:['Cross your kicking leg behind and around your standing leg.',
+     'Keep your standing leg planted and balanced throughout — it carries all your weight.',
+     'Strike through with the same technique as a normal pass or cross, just from behind.',
+     'Practice first with a stationary ball before adding any movement.']}
+];
+
+/* ============================ QUIZ BANK (100, football history) ============================ */
+var CATS = {
+  wc:{label:'World Cup', icon:'globe'},
+  eu:{label:'Euro & Continental', icon:'trophy'},
+  fr:{label:'Firsts & Rules', icon:'book'},
+  rl:{label:'Records & Legends', icon:'star'},
+  cd:{label:'Clubs & Derbies', icon:'medal'}
+};
+var QUIZ_RAW = [
+['Which country won the first-ever FIFA World Cup, in 1930?',['Uruguay','Argentina','Brazil','Italy'],0,'wc'],
+['Italy won back-to-back World Cup titles in 1934 and 1938 — which decade?',['1930s','1940s','1950s','1960s'],0,'wc'],
+['Hosts Brazil suffered a shock 1950 World Cup final defeat known as the "Maracanazo" — to which country?',['Uruguay','Argentina','Paraguay','Peru'],0,'wc'],
+['West Germany\'s shock 1954 World Cup final win is nicknamed what?',['The Miracle of Bern','The Wonder of Munich','The Berlin Shock','The Hamburg Surprise'],0,'wc'],
+['Pelé won his first World Cup title in 1958 at what age?',['15','17','19','21'],1,'wc'],
+['Brazil won back-to-back World Cups in 1958 and which other year?',['1962','1966','1970','1974'],0,'wc'],
+['Which country won the World Cup on home soil in 1966, their only title to date?',['England','West Germany','Italy','France'],0,'wc'],
+['Brazil won their third World Cup title in 1970, hosted by which country?',['Mexico','Chile','Peru','USA'],0,'wc'],
+['The Netherlands\' "Total Football" side lost the 1974 World Cup final to which host nation?',['West Germany','Italy','Argentina','Brazil'],0,'wc'],
+['Argentina won their first World Cup title in 1978 on home soil, led by which captain?',['Mario Kempes','Diego Maradona','Daniel Passarella','Osvaldo Ardiles'],2,'wc'],
+['Diego Maradona\'s infamous handball goal against England at the 1986 World Cup is commonly called what?',['The Hand of God','The Phantom Goal','The Ghost Strike','The Shadow Touch'],0,'wc'],
+['West Germany won their third World Cup title in which year?',['1986','1990','1994','1998'],1,'wc'],
+['The 1994 World Cup final was the first ever decided by what?',['A penalty shootout','A golden goal','Extra-time goal','A replay'],0,'wc'],
+['France won their first World Cup on home soil in which year?',['1994','1998','2000','2002'],1,'wc'],
+['The 2002 World Cup was the first held in Asia, co-hosted by Japan and which other country?',['South Korea','China','Thailand','Indonesia'],0,'wc'],
+['Spain won their first-ever World Cup title in which year?',['2006','2010','2014','2018'],1,'wc'],
+['Germany famously beat Brazil 7-1 in the semifinal of the World Cup held in which year?',['2010','2014','2018','2022'],1,'wc'],
+['Which breakout teenage star headlined France\'s 2018 World Cup win?',['Kylian Mbappé','Antoine Griezmann','Paul Pogba','Olivier Giroud'],0,'wc'],
+['Argentina\'s 2022 World Cup final win over France was decided by what?',['A penalty shootout','Extra-time golden goal','A single late goal','VAR review'],0,'wc'],
+['Spain beat Argentina in the 2026 World Cup final by what score?',['1-0','2-1','2-0','3-2'],0,'wc'],
+['Which country has won the most men\'s World Cup titles overall?',['Germany','Brazil','Italy','Argentina'],1,'wc'],
+['Which two countries have each won the World Cup exactly four times?',['Germany and Italy','Brazil and Argentina','France and Spain','Uruguay and England'],0,'wc'],
+['Which country won the very first UEFA European Championship, in 1960?',['Soviet Union','Spain','France','Italy'],0,'eu'],
+['Which country is the only one to win back-to-back European Championships, in 2008 and 2012?',['Spain','Germany','Italy','France'],0,'eu'],
+['Czechoslovakia, a country that no longer exists, won the European Championship in which decade?',['1960s','1970s','1980s','1990s'],1,'eu'],
+['Denmark\'s shock 1992 European Championship win came after they replaced which country, excluded due to war?',['Yugoslavia','Soviet Union','East Germany','Albania'],0,'eu'],
+['Greece won Euro 2004 as huge underdogs, beating which host nation in the final?',['Portugal','Germany','France','Netherlands'],0,'eu'],
+['Which country won Euro 2000, played in Belgium and the Netherlands?',['France','Italy','Portugal','Spain'],0,'eu'],
+['Portugal won their first-ever major trophy at Euro 2016 — which country hosted that tournament?',['France','Portugal','Belgium','Germany'],0,'eu'],
+['Italy won Euro 2020 (played in 2021), beating England on penalties at which stadium?',['Wembley','Stade de France','Camp Nou','Allianz Arena'],0,'eu'],
+['Spain beat which country in the Euro 2024 final?',['England','Germany','France','Netherlands'],0,'eu'],
+['Including 2024, how many European Championship titles has Spain won in total?',['2','3','4','5'],2,'eu'],
+['West Germany won their first European Championship title in which year?',['1968','1972','1976','1980'],1,'eu'],
+['What is the trophy awarded to the UEFA European Championship winners called?',['The Henri Delaunay Trophy','The Jules Rimet Trophy','The Coupe de Nations','The Continental Cup'],0,'eu'],
+['What is widely recognised as the world\'s oldest football club, founded in 1857?',['Sheffield FC','Notts County','Stoke City','Cambridge University AFC'],0,'fr'],
+['The first official international football match, in 1872, was played between Scotland and which country?',['England','Wales','Ireland','France'],0,'fr'],
+['The Football Association, the world\'s first governing body for the sport, was founded in 1863 in which city?',['London','Manchester','Sheffield','Edinburgh'],0,'fr'],
+['FIFA, football\'s world governing body, was founded in which year?',['1894','1904','1914','1924'],1,'fr'],
+['Yellow and red cards were introduced to football at which World Cup?',['1966','1970','1974','1978'],1,'fr'],
+['Before a 1925 law change, how many defending players had to be between an attacker and the goal line to avoid offside?',['One','Two','Three','Four'],2,'fr'],
+['The "back-pass rule," banning goalkeepers from handling deliberate passes from teammates, was introduced in which year?',['1988','1992','1996','2000'],1,'fr'],
+['VAR (Video Assistant Referee) was first used at a men\'s World Cup in which year?',['2014','2018','2022','2010'],1,'fr'],
+['A standard football match lasts how many minutes, excluding stoppage time?',['80','90','100','120'],1,'fr'],
+['Each half of a standard football match lasts how many minutes?',['30','40','45','50'],2,'fr'],
+['How many players does each side have on the pitch at kickoff?',['9','10','11','12'],2,'fr'],
+['Outside the penalty area, which part of the body may a player not use to deliberately control the ball (excluding the goalkeeper)?',['Chest','Head','Hands','Thigh'],2,'fr'],
+['The first-ever Women\'s World Cup was held in which year?',['1987','1991','1995','1999'],1,'fr'],
+['Which country won the first-ever Women\'s World Cup in 1991?',['United States','Norway','Germany','China'],0,'fr'],
+['The 2026 World Cup was the first co-hosted by three nations: the USA, Mexico, and which other country?',['Canada','Costa Rica','Panama','Guatemala'],0,'fr'],
+['How many goals make up a "hat-trick" for one player in a single match?',['2','3','4','5'],1,'fr'],
+['What color card results in a player being sent off?',['Yellow','Red','Blue','Orange'],1,'fr'],
+['What is it called when a match ends with no goals scored by either side?',['A clean sheet','A goalless draw','A shutout','A blank'],1,'fr'],
+['The original World Cup trophy was named after which FIFA president?',['Jules Rimet','João Havelange','Stanley Rous','Sepp Blatter'],0,'fr'],
+['Brazil kept the Jules Rimet Trophy permanently after winning it a third time in 1970 — but it was stolen, never to be recovered, in which decade?',['1970s','1980s','1990s','2000s'],1,'fr'],
+['How many on-field officials typically form the core refereeing team (referee plus assistants), not counting the fourth official?',['1','2','3','4'],2,'fr'],
+['What shape is a standard football pitch?',['Square','Rectangular','Oval','Trapezoid'],1,'fr'],
+['The first World Cup held on the African continent took place in which year?',['2006','2010','2014','2002'],1,'fr'],
+['Who is the all-time leading goalscorer in men\'s World Cup history, with 18 goals as of the 2026 tournament?',['Lionel Messi','Miroslav Klose','Cristiano Ronaldo','Ronaldo (Brazil)'],0,'rl'],
+['Before Lionel Messi, who held the World Cup career scoring record with 16 goals?',['Miroslav Klose','Gerd Müller','Just Fontaine','Pelé'],0,'rl'],
+['Which player scored a record 13 goals at the single 1958 World Cup, a record that still stands?',['Just Fontaine','Pelé','Gerd Müller','Eusébio'],0,'rl'],
+['Pelé is the only player to be part of three World Cup-winning squads — in which years?',['1958, 1962 and 1966','1958, 1962 and 1970','1962, 1966 and 1970','1958, 1966 and 1970'],1,'rl'],
+['Lionel Messi finally won his first World Cup title in which year, with Argentina?',['2014','2018','2022','2026'],2,'rl'],
+['Diego Maradona led Argentina to World Cup glory in which year?',['1982','1986','1990','1994'],1,'rl'],
+['Johan Cruyff is most associated with which revolutionary 1970s tactical style?',['Total Football','Catenaccio','Route One','Tiki-Taka'],0,'rl'],
+['The "Cruyff Turn" dribbling move is named after which Dutch legend?',['Johan Cruyff','Marco van Basten','Dennis Bergkamp','Ruud Gullit'],0,'rl'],
+['Which Dutch club did Johan Cruyff play for the majority of his career?',['Feyenoord','PSV Eindhoven','Ajax','AZ Alkmaar'],2,'rl'],
+['Manchester United\'s dramatic injury-time comeback to win the 1999 Champions League final happened at which stadium?',['Camp Nou','Wembley','Stade de France','San Siro'],0,'rl'],
+['Which English club famously went the entire 2003-04 Premier League season unbeaten, earning the nickname "The Invincibles"?',['Arsenal','Chelsea','Manchester United','Liverpool'],0,'rl'],
+['Leicester City\'s stunning Premier League title win, defying huge odds, happened in which year?',['2014','2015','2016','2017'],2,'rl'],
+['Real Madrid are historically the most successful club in which European competition?',['The Europa League','The UEFA Champions League','The UEFA Super Cup','The Cup Winners\' Cup'],1,'rl'],
+['Diego Maradona passed away in which year?',['2018','2019','2020','2021'],2,'rl'],
+['José Mourinho earned which nickname early in his managerial career?',['The Special One','The Chosen One','The Mastermind','The Tactician'],0,'rl'],
+['Sir Alex Ferguson, one of football\'s most decorated managers, retired from Manchester United in which year?',['2011','2012','2013','2014'],2,'rl'],
+['Brazilian forward Ronaldo, nicknamed "O Fenômeno," was part of World Cup-winning squads in 1994 and which other year?',['1998','2002','2006','2010'],1,'rl'],
+['Which of these clubs did NEITHER Lionel Messi NOR Cristiano Ronaldo ever play for?',['Barcelona','Real Madrid','Juventus','Bayern Munich'],3,'rl'],
+['Legendary goalkeeper Gianluigi Buffon, long considered among the best ever, played for which national team?',['Spain','Italy','France','Germany'],1,'rl'],
+['Which Portuguese forward became one of the sport\'s most decorated players, winning titles with Sporting, Manchester United, Real Madrid and Juventus?',['Cristiano Ronaldo','Luís Figo','Eusébio','Nani'],0,'rl'],
+['The fixture between Real Madrid and Barcelona is known worldwide as what?',['El Derbi','El Clásico','La Liga Final','El Gran Duelo'],1,'cd'],
+['The fixture between Boca Juniors and River Plate is known as what?',['El Superclásico','La Bombonera Derby','El Gran Río','La Final Eterna'],0,'cd'],
+['AC Milan and Inter Milan share which famous stadium?',['Allianz Stadium','San Siro (Giuseppe Meazza)','Stadio Olimpico','Juventus Stadium'],1,'cd'],
+['Liverpool\'s home stadium is called what?',['Anfield','Goodison Park','Old Trafford','Stamford Bridge'],0,'cd'],
+['Arsenal\'s home stadium is called what?',['Emirates Stadium','The Den','White Hart Lane','Highbury Park'],0,'cd'],
+['"La Liga" is the top football league of which country?',['Portugal','Spain','Italy','Mexico'],1,'cd'],
+['"Serie A" is the top football league of which country?',['Spain','France','Italy','Greece'],2,'cd'],
+['"Bundesliga" is the top football league of which country?',['Austria','Switzerland','Germany','Netherlands'],2,'cd'],
+['"Primeira Liga" is the top football league of which country?',['Portugal','Brazil','Spain','Italy'],0,'cd'],
+['"Ligue 1" is the top football league of which country?',['Belgium','France','Luxembourg','Switzerland'],1,'cd'],
+['Which South American club competition is the continent\'s equivalent of the UEFA Champions League?',['Copa América','Copa Libertadores','Copa Sudamericana','Recopa Sudamericana'],1,'cd'],
+['The UEFA Champions League was known by which name before being rebranded in 1992?',['The European Cup','The UEFA Trophy','The Continental League','The European Masters'],0,'cd'],
+['Celtic and Rangers\' fierce Glasgow rivalry is known as what?',['The Old Firm','The Tartan Derby','The Clyde Clash','The North Divide'],0,'cd'],
+['Which stadium is Celtic\'s home ground?',['Ibrox Stadium','Celtic Park','Hampden Park','Tynecastle'],1,'cd'],
+['Flamengo and Palmeiras, historic football rivals, both come from which country?',['Argentina','Brazil','Uruguay','Chile'],1,'cd'],
+['Flamengo\'s famous home stadium, one of football\'s largest, is called what?',['The Maracanã','La Bombonera','The Allianz Parque','Morumbi'],0,'cd'],
+['Galatasaray and Fenerbahçe\'s derby, which spans two continents, is contested by clubs from which city?',['Ankara','Izmir','Istanbul','Bursa'],2,'cd'],
+['Boca Juniors\' steep, colourful home stadium is nicknamed what?',['La Bombonera','El Monumental','La Catedral','El Cilindro'],0,'cd'],
+['Which club, nicknamed "The Red Devils," plays its home matches at Old Trafford?',['Manchester City','Manchester United','Liverpool','Everton'],1,'cd'],
+['Bayern Munich\'s home stadium is called what?',['Signal Iduna Park','Allianz Arena','Olympiastadion','Red Bull Arena'],1,'cd'],
+['Ajax, famous for Total Football and their youth academy, are based in which city?',['Rotterdam','The Hague','Amsterdam','Utrecht'],2,'cd'],
+['Paris Saint-Germain play their home matches at which stadium?',['Parc des Princes','Stade de France','Vélodrome','Groupama Stadium'],0,'cd'],
+['England\'s top flight was rebranded the "Premier League" in 1992 — what was it called before that?',['Football League First Division','English Super League','The Championship','Division One Elite'],0,'fr']
+];
+var QUIZ_BANK = QUIZ_RAW.map(function(r,i){ return {id:'q'+i, q:r[0], a:r[1], c:r[2], cat:r[3]}; });
+
+/* ============================ STORAGE ============================ */
+function load(key, fallback){ try{ var v=localStorage.getItem(key); return v?JSON.parse(v):fallback; }catch(e){ return fallback; } }
+function save(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+
+/* ============================ LEADERBOARD SEED (30% bots / 70% online) ============================ */
+var LEADERBOARD_SEED = [
+  {name:'CPU_Falcao9',quiz:260,pred:40,kind:'bot'},
+  {name:'Bot.OffsideTrap',quiz:210,pred:33,kind:'bot'},
+  {name:'NPC_Striker',quiz:330,pred:45,kind:'bot'},
+  {name:'RNG_Keeper',quiz:180,pred:27,kind:'bot'},
+  {name:'ScriptBaller_3',quiz:290,pred:50,kind:'bot'},
+  {name:'AimbotArteta',quiz:240,pred:38,kind:'bot'},
+  {name:'SimStriker_5',quiz:220,pred:31,kind:'bot'},
+  {name:'Bot.FreeKick',quiz:265,pred:44,kind:'bot'},
+  {name:'GhostGK_AI',quiz:195,pred:26,kind:'bot'},
+  {name:'AutoVAR_9',quiz:305,pred:48,kind:'bot'}
+];
+
+/* ============================ APP STATE ============================ */
+var Q_TIME = 10;
+var APP = {
+  user:null, userKey:null, profile:null,
+  view:'home', homeTab:'foryou', calFilter:'all', calDayOffset:0,
+  tutProgress:{}, predictions:{}, quizHistory:[], quiz:null,
+  ob:{ step:1, country:null, teams:[], comps:[] },
+  auth:{ mode:'login', username:'', password:'', confirm:'', error:'', busy:false }
+};
+function scopedKey(base){ return base+'__'+(APP.userKey||'anon'); }
+function loadUserData(){
+  APP.tutProgress = load(scopedKey('tf_tut_progress'), {});
+  APP.predictions = load(scopedKey('tf_predictions'), {});
+  APP.quizHistory = load(scopedKey('tf_quiz_history'), []);
+  APP.profile = load(scopedKey('tf_profile'), null);
+}
+function loadAccounts(){ return load('tf_accounts', {}); }
+function saveAccounts(a){ save('tf_accounts', a); }
+
+/* ============================ BACKEND CONFIG (Google Apps Script) ============================
+   Paste your deployed Apps Script Web App URL below to store accounts/passwords and the online
+   leaderboard in a real Google Sheet instead of just this browser's local storage. All password
+   hashing then happens server-side in the Apps Script, never in this file. The matching Apps
+   Script code (doGet/doPost) is provided alongside this app — see the setup notes that came with it.
+   Leave this as '' to keep running in local-only demo mode. Note: a page published as a Claude
+   Artifact can't reach any outside server (its sandbox blocks network calls), so a configured
+   APPS_SCRIPT_URL only works once this HTML file is hosted elsewhere (e.g. GitHub Pages, Netlify). */
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzbo0CcBla8coT8jr4kBT3pOMEXkI5wutGkv-WySKJc53fWQbDZZbRFhvuaZ5-9GbyQTA/exec';
+function hasBackend(){ return !!APPS_SCRIPT_URL; }
+function backendCall(action, payload){
+  payload = payload || {};
+  payload.action = action;
+  return fetch(APPS_SCRIPT_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'}, /* avoids a CORS preflight against Apps Script */
+    body: JSON.stringify(payload)
+  }).then(function(r){ return r.json(); });
+}
+
+function initials(name){
+  var parts = name.trim().split(/\s+/);
+  return (parts[0][0] + (parts[1]?parts[1][0]:'')).toUpperCase();
+}
+function fmtDate(d){
+  var diffDays = Math.round((new Date(d.getFullYear(),d.getMonth(),d.getDate()) - new Date(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate()))/86400000);
+  var time = d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  if(diffDays===0) return 'Today · '+time;
+  if(diffDays===1) return 'Tomorrow · '+time;
+  if(diffDays===-1) return 'Yesterday · '+time;
+  var label = d.toLocaleDateString([], {month:'short',day:'numeric'});
+  return label+' · '+time;
+}
+function dateHeadLabel(d){
+  return d.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'});
+}
+
+/* crest: blue/white shield badge, deterministic pattern + initials per team */
+function crestSVG(teamId, size){
+  size = size||26;
+  var h = hashStr(teamId);
+  var variant = h % 4;
+  var shades = ['#0A1B3D','#1452D6','#2C6CF0'];
+  var base = shades[h % 3];
+  var uid = 'c'+teamId+size;
+  var shield = 'M13 1 L24 5 L24 13 C24 19.6 19 23.6 13 25.6 C7 23.6 2 19.6 2 13 L2 5 Z';
+  var defs = '<clipPath id="'+uid+'"><path d="'+shield+'"/></clipPath>';
+  var inner = '';
+  if(variant===0){ inner = '<path d="'+shield+'" fill="'+base+'"/>'; }
+  else if(variant===1){ inner = '<path d="'+shield+'" fill="'+base+'"/><path d="'+shield+'" fill="none" stroke="#fff" stroke-width="1.6" opacity=".55"/>'; }
+  else if(variant===2){ inner = '<g clip-path="url(#'+uid+')"><rect x="0" y="0" width="13" height="26" fill="'+base+'"/><rect x="13" y="0" width="13" height="26" fill="#0A1B3D"/></g>'; }
+  else { inner = '<path d="'+shield+'" fill="'+base+'"/><g clip-path="url(#'+uid+')" opacity=".32" stroke="#fff" stroke-width="1"><path d="M2 5 24 23"/><path d="M24 5 2 23"/></g>'; }
+  return '<svg class="crest" width="'+size+'" height="'+size+'" viewBox="0 0 26 26">'+defs+inner+
+    '<text x="13" y="16" text-anchor="middle" font-family="Work Sans, sans-serif" font-size="7.6" font-weight="800" fill="#fff">'+teamId+'</text></svg>';
+}
+
+/* ============================ CRYPTO (demo-grade, client-side only) ============================ */
+function randSalt(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
+function sha256Hex(str){
+  var enc = new TextEncoder().encode(str);
+  return crypto.subtle.digest('SHA-256', enc).then(function(buf){
+    return Array.prototype.map.call(new Uint8Array(buf), function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+  });
+}
+
+/* ============================ RENDER: SHELL/NAV ============================ */
+var NAV_ITEMS = [
+  {id:'home',label:'Home',icon:'home'},
+  {id:'tutorials',label:'Tutorials',icon:'tutorials'},
+  {id:'quiz',label:'Quiz',icon:'quiz'},
+  {id:'predictions',label:'Predictions',icon:'target'},
+  {id:'calendar',label:'Calendar',icon:'calendar'},
+  {id:'leaderboard',label:'Leaderboard',icon:'trophy'},
+  {id:'profile',label:'Profile',icon:'user'}
+];
+
+function buildNav(){
+  document.getElementById('sidenav').innerHTML = NAV_ITEMS.map(function(n){
+    return '<button class="navitem" data-view="'+n.id+'">'+icon(n.icon,19)+'<span>'+n.label+'</span></button>';
+  }).join('');
+  document.getElementById('bottomnav').innerHTML = NAV_ITEMS.map(function(n){
+    return '<button data-view="'+n.id+'">'+icon(n.icon,20)+'<span>'+n.label+'</span></button>';
+  }).join('');
+  document.querySelectorAll('[data-view]').forEach(function(b){
+    b.addEventListener('click', function(){ showView(b.getAttribute('data-view')); });
+  });
+}
+
+function showView(name){
+  if(name!=='quiz') clearQuestionTimer();
+  APP.view = name;
+  try{ history.replaceState(null,'','#'+name); }catch(e){}
+  document.querySelectorAll('.view').forEach(function(v){ v.hidden = (v.id !== 'view-'+name); });
+  document.querySelectorAll('.navitem,.bottomnav button').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-view')===name);
+  });
+  var titles = {home:'Home',tutorials:'Skill Tutorials',quiz:'Quiz',predictions:'Predictions',calendar:'Match Calendar',leaderboard:'Leaderboard',profile:'Profile'};
+  document.getElementById('pageTitle').textContent = titles[name] || 'Home';
+  renderView(name);
+  window.scrollTo(0,0);
+}
+
+function renderView(name){
+  if(name==='home') renderHome();
+  else if(name==='tutorials') renderTutorials();
+  else if(name==='quiz') renderQuizIdle();
+  else if(name==='predictions') renderPredictions();
+  else if(name==='calendar') renderCalendar();
+  else if(name==='leaderboard') renderLeaderboard();
+  else if(name==='profile') renderProfile();
+}
+
+/* ============================ HOME / NEWS ============================ */
+var CAT_ICON = {Tactics:'target',Officiating:'book',Scouting:'search',Fitness:'medal',Analysis:'star',Youth:'tutorials'};
+var TOP_FEATURES = [
+  {title:'Five tactical trends shaping this season',summary:'From inverted fullbacks to asymmetric back threes — how elite sides are reshaping the back line.',comp:null,cat:'Tactics'},
+  {title:'VAR review: how handball calls are being applied',summary:'A look at the officiating guidance clubs were sent before the season and what\'s changed in practice.',comp:null,cat:'Officiating'},
+  {title:'Scouting report: the wingbacks redefining modern defending',summary:'Why the best modern wingbacks are judged on positioning as much as pace.',comp:null,cat:'Scouting'},
+  {title:'Inside pre-season: building match fitness in six weeks',summary:'Sports scientists on periodising load so squads peak for the opening weeks, not August training.',comp:null,cat:'Fitness'},
+  {title:'The press from the front: who\'s doing it best this term',summary:'Comparing high-press structures across several of the world\'s top leagues.',comp:'Bundesliga',cat:'Tactics'},
+  {title:'Set-piece specialists are changing recruitment',summary:'More clubs now hire a dedicated set-piece coach — here\'s what the role actually does.',comp:null,cat:'Analysis'},
+  {title:'Why possession share means less than it used to',summary:'Expected threat and field tilt are overtaking raw possession numbers in how analysts judge control.',comp:null,cat:'Analysis'},
+  {title:'The academy pipelines to watch this year',summary:'A tour of the youth systems currently producing the most first-team minutes.',comp:'Primeira Liga',cat:'Youth'}
+];
+function matchNewsItems(){
+  return MATCHES.map(function(m){
+    var home=TEAM_BY_ID[m.home], away=TEAM_BY_ID[m.away];
+    var title, summary;
+    if(m.finished){
+      title = home.name+' '+m.score[0]+'-'+m.score[1]+' '+away.name;
+      summary = 'Full-time report: '+home.name+' and '+away.name+' played out a '+m.score[0]+'-'+m.score[1]+' result in the '+m.comp+' at '+m.venue+'.';
+    } else {
+      title = 'Preview: '+home.name+' host '+away.name;
+      summary = home.name+' welcome '+away.name+' to '+m.venue+' in a '+m.comp+' fixture on '+fmtDate(m.date)+'.';
+    }
+    return {title:title, summary:summary, comp:m.comp, country:home.country, teamIds:[m.home,m.away], top:false, kind:m.finished?'Report':'Preview', time:m.finished?'Final':fmtDate(m.date)};
+  });
+}
+function allNews(){
+  var feats = TOP_FEATURES.map(function(f){ return {title:f.title, summary:f.summary, comp:f.comp, country:null, teamIds:[], top:true, kind:f.cat, time:'Feature'}; });
+  return feats.concat(matchNewsItems());
+}
+function newsMatchesProfile(item){
+  var p = APP.profile; if(!p) return false;
+  if(item.teamIds.some(function(id){ return p.teams.indexOf(id)>-1; })) return true;
+  if(item.comp && p.comps.indexOf(item.comp)>-1) return true;
+  if(item.country && item.country===p.country) return true;
+  return false;
+}
+function newsCardHTML(item){
+  var h = hashStr(item.title);
+  var hue = ['#0A1B3D','#1452D6','#2C6CF0','#143566'][h%4];
+  var overlay;
+  if(item.teamIds && item.teamIds.length===2){
+    overlay = '<div class="news-crests">'+crestSVG(item.teamIds[0],32)+crestSVG(item.teamIds[1],32)+'</div>';
+  } else {
+    overlay = '<div class="news-iconwm">'+icon(CAT_ICON[item.kind]||'trophy',42)+'</div>';
+  }
+  return '<article class="card news-card">'+
+    '<div class="news-art" style="background:linear-gradient(135deg,'+hue+', color-mix(in srgb, '+hue+' 60%, #000))">'+
+      overlay+
+      '<span class="tag">'+escapeHTML(item.kind)+'</span>'+
+    '</div>'+
+    '<div class="news-body">'+
+      '<h4>'+escapeHTML(item.title)+'</h4>'+
+      '<p>'+escapeHTML(item.summary)+'</p>'+
+      '<div class="news-foot"><span>'+escapeHTML(item.comp||'Football')+'</span><b>'+escapeHTML(item.time)+'</b></div>'+
+    '</div>'+
+  '</article>';
+}
+function escapeHTML(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+function renderHome(){
+  var el = document.getElementById('view-home');
+  var news = allNews();
+  var forYou = news.filter(newsMatchesProfile);
+  var top = news.filter(function(n){ return n.top; }).concat(news.filter(function(n){return !n.top;}).slice(0,8));
+  el.innerHTML =
+    '<div id="liveScoresWidget"></div>'+
+    '<div class="section-head"><h2>Your feed</h2></div>'+
+    '<div class="tabs" id="homeTabs">'+
+      '<button data-t="foryou" class="'+(APP.homeTab==='foryou'?'active':'')+'">For You</button>'+
+      '<button data-t="top" class="'+(APP.homeTab==='top'?'active':'')+'">Top Stories</button>'+
+    '</div>'+
+    '<div id="homeFeed" class="grid"></div>';
+  document.querySelectorAll('#homeTabs button').forEach(function(b){
+    b.addEventListener('click', function(){ APP.homeTab=b.getAttribute('data-t'); renderHome(); });
+  });
+  var feedEl = document.getElementById('homeFeed');
+  var list = APP.homeTab==='foryou' ? forYou : top;
+  if(list.length===0){
+    feedEl.outerHTML = '<div class="empty">'+icon('search',34)+'<p><b>Nothing here yet.</b></p><p class="muted" style="max-width:320px;">Follow a few more teams or competitions in your profile and your feed will fill up.</p><button class="btn sm" id="goProfile">Edit preferences</button></div>';
+    var gp = document.getElementById('goProfile'); if(gp) gp.addEventListener('click', function(){ showView('profile'); });
+  } else {
+    feedEl.innerHTML = list.map(newsCardHTML).join('');
+  }
+  renderLiveScoresWidget();
+}
+
+/* ============================ LIVE SCORES (optional, via Apps Script + football-data.org) ============================
+   This is a real, genuinely-live panel — separate from the simulated MATCHES/predictions/calendar
+   data above. It only shows real fixtures for the "big five" leagues football-data.org's free tier
+   covers (Premier League, La Liga, Bundesliga, Serie A, Ligue 1), fetched through the Apps Script
+   backend (so the football-data.org token never has to live in this client-side file). It's left
+   separate from the curated 52-team dataset deliberately: the predictions/calendar/leaderboard
+   game needs reliable, known outcomes across ALL 23 countries we added, and football-data.org's
+   free tier doesn't cover most of them (no Saudi Pro League, MLS, Liga MX, J1 League, etc.), so
+   merging the two would mean predictions quietly having no fixture to score most days. */
+function renderLiveScoresWidget(){
+  var el = document.getElementById('liveScoresWidget');
+  if(!el) return;
+  if(!hasBackend()){
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML =
+    '<div class="card" style="gap:0;padding:4px 16px;margin-bottom:14px;">'+
+      '<div class="section-head" style="padding:10px 0;"><h3 style="font-size:15px;">Live scores</h3><p class="muted" style="font-size:11px;">via football-data.org</p></div>'+
+      '<div id="liveScoresList" class="muted" style="padding:6px 0 14px;font-size:12.5px;">Loading…</div>'+
+    '</div>';
+  backendCall('matches', {}).then(function(res){
+    var listEl = document.getElementById('liveScoresList');
+    if(!listEl) return; /* user navigated away before this resolved */
+    if(!res || !res.ok || !res.matches || !res.matches.length){
+      listEl.textContent = (res && res.error) || 'No live fixtures from football-data.org right now.';
+      return;
+    }
+    listEl.outerHTML = '<div id="liveScoresList" style="display:flex;flex-direction:column;gap:0;">'+
+      res.matches.slice(0,8).map(function(m){
+        var scoreTxt = (m.status==='FINISHED'||m.status==='IN_PLAY'||m.status==='PAUSED')
+          ? (m.homeScore!=null?m.homeScore:'–')+' – '+(m.awayScore!=null?m.awayScore:'–')
+          : new Date(m.utcDate).toLocaleDateString([], {month:'short',day:'numeric'})+' · '+new Date(m.utcDate).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+        return '<div class="match-row" style="padding:8px 0;">'+
+          '<div class="match-comp">'+escapeHTML(m.competition||'')+'</div>'+
+          '<div class="match-core">'+
+            '<div class="match-team"><span>'+escapeHTML(m.home)+'</span></div>'+
+            '<span class="match-score mono" style="font-size:12.5px;">'+scoreTxt+'</span>'+
+            '<div class="match-team" style="justify-content:flex-end;text-align:right;"><span>'+escapeHTML(m.away)+'</span></div>'+
+          '</div>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }).catch(function(){
+    var listEl = document.getElementById('liveScoresList');
+    if(listEl) listEl.textContent = 'Could not reach the live scores backend.';
+  });
+}
+
+/* ============================ TUTORIALS ============================ */
+function renderTutorials(){
+  var el = document.getElementById('view-tutorials');
+  el.innerHTML =
+    '<div class="section-head"><h2>Skill tutorials</h2><p class="muted">'+Object.keys(APP.tutProgress).length+' of '+TUTORIALS.length+' completed</p></div>'+
+    '<div class="grid" id="tutGrid"></div>';
+  document.getElementById('tutGrid').innerHTML = TUTORIALS.map(function(t){
+    var prog = APP.tutProgress[t.id] || [];
+    var pct = Math.round(100*prog.length/t.steps.length);
+    return '<article class="card tut-card" data-id="'+t.id+'">'+
+      '<div class="tut-top">'+
+        '<span class="badge lvl-'+t.level+'">'+t.level+'</span>'+
+        '<span class="playcircle">'+icon('play',18)+'</span>'+
+      '</div>'+
+      '<h4 style="font-size:16px;">'+escapeHTML(t.title)+'</h4>'+
+      '<p class="muted" style="font-size:12.5px;">'+escapeHTML(t.cat)+' · '+t.min+' min</p>'+
+      '<div class="tut-prog"><b style="width:'+pct+'%"></b></div>'+
+    '</article>';
+  }).join('');
+  document.querySelectorAll('.tut-card').forEach(function(c){
+    c.addEventListener('click', function(){ openTutorial(c.getAttribute('data-id')); });
+  });
+}
+function openTutorial(id){
+  var t = TUTORIALS.filter(function(x){return x.id===id;})[0];
+  var done = APP.tutProgress[id] || [];
+  var html =
+    '<div class="modal">'+
+      '<div class="modal-head"><div><span class="badge lvl-'+t.level+'">'+t.level+'</span>'+
+        '<h3 style="margin-top:8px;">'+escapeHTML(t.title)+'</h3>'+
+        '<p class="muted" style="font-size:12.5px;margin-top:2px;">'+escapeHTML(t.cat)+' · '+t.min+' min</p></div>'+
+        '<button class="iconbtn" id="closeModal">'+icon('close',18)+'</button></div>'+
+      '<div class="cue"><b>Key cue — </b>'+escapeHTML(t.cue)+'</div>'+
+      '<div id="stepList">'+t.steps.map(function(s,i){
+        var on = done.indexOf(i)>-1;
+        return '<div class="step-row"><button class="step-check '+(on?'on':'')+'" data-i="'+i+'">'+(on?icon('check',14):'')+'</button><p style="font-size:13.5px;">'+escapeHTML(s)+'</p></div>';
+      }).join('')+'</div>'+
+      '<button class="btn block" id="markAll">'+(done.length===t.steps.length?'Completed ✓':'Mark all steps complete')+'</button>'+
+    '</div>';
+  openModal(html);
+  document.querySelectorAll('.step-check').forEach(function(b){
+    b.addEventListener('click', function(){
+      var i = parseInt(b.getAttribute('data-i'),10);
+      var arr = APP.tutProgress[id] || [];
+      var idx = arr.indexOf(i);
+      if(idx>-1) arr.splice(idx,1); else arr.push(i);
+      APP.tutProgress[id] = arr; save(scopedKey('tf_tut_progress'), APP.tutProgress);
+      closeModal(); openTutorial(id); renderTutorials();
+    });
+  });
+  document.getElementById('markAll').addEventListener('click', function(){
+    APP.tutProgress[id] = t.steps.map(function(_,i){return i;});
+    save(scopedKey('tf_tut_progress'), APP.tutProgress);
+    closeModal(); renderTutorials();
+  });
+}
+
+/* ============================ QUIZ (10 random Qs, 10s timer, speed bonus) ============================ */
+function shuffle(arr){ var a=arr.slice(); for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var tmp=a[i]; a[i]=a[j]; a[j]=tmp; } return a; }
+function renderQuizIdle(){
+  clearQuestionTimer();
+  var el = document.getElementById('view-quiz');
+  var best = APP.quizHistory.reduce(function(m,h){return Math.max(m,h.score);},0);
+  el.innerHTML =
+    '<div class="quiz-hero">'+
+      '<h3>Football History Trivia</h3>'+
+      '<p style="color:#C9D8F5;max-width:440px;">10 random questions from a bank of '+QUIZ_BANK.length+', all football history. You get 10 seconds per question — answer right and fast for up to 10 points; the slower the correct answer, the fewer points; a wrong answer or a timeout scores 0.</p>'+
+      '<div class="quiz-stat-row">'+
+        '<div class="quiz-stat"><b>'+APP.quizHistory.length+'</b><span>Rounds played</span></div>'+
+        '<div class="quiz-stat"><b>'+best+'</b><span>Best score</span></div>'+
+      '</div>'+
+      '<button class="btn block" id="startQuiz" style="max-width:220px;">Start quiz</button>'+
+    '</div>'+
+    (APP.quizHistory.length? '<div class="section-head"><h2>Recent rounds</h2></div><div id="quizHist" class="grid"></div>' : '');
+  document.getElementById('startQuiz').addEventListener('click', startQuiz);
+  var hist = document.getElementById('quizHist');
+  if(hist){
+    hist.innerHTML = APP.quizHistory.slice(-6).reverse().map(function(h){
+      return '<div class="card"><p class="muted" style="font-size:11.5px;">'+new Date(h.at).toLocaleDateString()+'</p><h4 style="font-size:22px;" class="mono">'+h.score+' / 100</h4><p class="muted" style="font-size:12.5px;">'+h.correct+' of '+h.total+' correct</p></div>';
+    }).join('');
+  }
+}
+function startQuiz(){
+  APP.quiz = { qs: shuffle(QUIZ_BANK).slice(0,10), i:0, score:0, correct:0, answered:false, qStart:0, tickId:null, timeoutId:null };
+  renderQuizQuestion();
+}
+function clearQuestionTimer(){
+  var Q = APP.quiz; if(!Q) return;
+  if(Q.tickId){ clearInterval(Q.tickId); Q.tickId=null; }
+  if(Q.timeoutId){ clearTimeout(Q.timeoutId); Q.timeoutId=null; }
+}
+function renderQuizQuestion(){
+  clearQuestionTimer();
+  var el = document.getElementById('view-quiz');
+  var Q = APP.quiz;
+  if(Q.i >= Q.qs.length){ return finishQuiz(); }
+  var q = Q.qs[Q.i];
+  var cat = CATS[q.cat];
+  var letters = ['A','B','C','D'];
+  el.innerHTML =
+    '<div class="quiz-hero">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+        '<span style="color:#9FB4E0;font-size:12.5px;font-weight:700;">QUESTION '+(Q.i+1)+' / '+Q.qs.length+'</span>'+
+        '<span class="mono" style="font-size:12.5px;color:#9FB4E0;">SCORE '+Q.score+'</span>'+
+      '</div>'+
+      '<div class="qbar"><b style="width:'+(100*Q.i/Q.qs.length)+'%"></b></div>'+
+      '<div class="qcatrow">'+icon(cat.icon,15)+'<span>'+cat.label+'</span></div>'+
+      '<p class="qtext" style="color:#fff;">'+escapeHTML(q.q)+'</p>'+
+      '<div class="timer-row"><div class="timerbar"><b id="timerFill" style="width:100%"></b></div><span class="timer-num" id="timerNum">'+Q_TIME+'s</span></div>'+
+    '</div>'+
+    '<div style="display:flex;flex-direction:column;gap:10px;" id="qopts">'+
+      q.a.map(function(opt,i){
+        return '<button class="qopt" data-i="'+i+'"><span class="letter">'+letters[i]+'</span><span>'+escapeHTML(opt)+'</span></button>';
+      }).join('')+
+    '</div>'+
+    '<div id="qFeedbackSlot"></div>';
+  document.querySelectorAll('.qopt').forEach(function(b){
+    b.addEventListener('click', function(){ answerQuiz(parseInt(b.getAttribute('data-i'),10)); });
+  });
+  startQuestionTimer();
+}
+function startQuestionTimer(){
+  var Q = APP.quiz;
+  Q.qStart = Date.now();
+  var fill = document.getElementById('timerFill');
+  if(fill){
+    fill.style.transition = 'none';
+    fill.style.width = '100%';
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        fill.style.transition = 'width '+Q_TIME+'s linear';
+        fill.style.width = '0%';
+      });
+    });
+  }
+  Q.tickId = setInterval(function(){
+    var left = Math.max(0, Q_TIME - (Date.now()-Q.qStart)/1000);
+    var numEl = document.getElementById('timerNum');
+    if(numEl) numEl.textContent = Math.ceil(left)+'s';
+    if(left<=0){ clearInterval(Q.tickId); Q.tickId=null; }
+  }, 150);
+  Q.timeoutId = setTimeout(function(){ if(!Q.answered) timeUpQuiz(); }, Q_TIME*1000+60);
+}
+function revealOptions(q, chosenIdx){
+  document.querySelectorAll('.qopt').forEach(function(b,idx){
+    b.disabled = true;
+    if(idx===q.c) b.classList.add('correct');
+    else if(idx===chosenIdx) b.classList.add('wrong');
+  });
+}
+function showQuizFeedback(html, cls){
+  var slot = document.getElementById('qFeedbackSlot');
+  if(slot) slot.innerHTML = '<div class="qfeedback '+cls+'">'+html+'</div>';
+}
+function answerQuiz(i){
+  var Q = APP.quiz; if(!Q || Q.answered) return; Q.answered = true;
+  clearQuestionTimer();
+  var q = Q.qs[Q.i];
+  var elapsed = (Date.now()-Q.qStart)/1000;
+  var timeLeft = Math.max(0, Q_TIME-elapsed);
+  var correct = i===q.c;
+  var pts = 0;
+  if(correct){
+    pts = Math.max(4, Math.round(4 + 6*(timeLeft/Q_TIME)));
+    Q.score += pts; Q.correct += 1;
+  }
+  revealOptions(q, i);
+  var fill = document.getElementById('timerFill'); if(fill) fill.style.transition='none';
+  if(correct) showQuizFeedback('Correct! +'+pts+' pts ('+timeLeft.toFixed(1)+'s left)', 'good');
+  else showQuizFeedback('Not quite — the answer was "'+escapeHTML(q.a[q.c])+'"', 'bad');
+  setTimeout(function(){ Q.i += 1; Q.answered = false; renderQuizQuestion(); }, 1100);
+}
+function timeUpQuiz(){
+  var Q = APP.quiz; if(!Q || Q.answered) return; Q.answered = true;
+  var q = Q.qs[Q.i];
+  revealOptions(q, -1);
+  var fill = document.getElementById('timerFill'); if(fill) fill.style.transition='none';
+  showQuizFeedback('Time\'s up! The answer was "'+escapeHTML(q.a[q.c])+'"', 'bad');
+  setTimeout(function(){ Q.i += 1; Q.answered = false; renderQuizQuestion(); }, 1100);
+}
+function finishQuiz(){
+  var Q = APP.quiz;
+  APP.quizHistory.push({at:Date.now(), score:Q.score, correct:Q.correct, total:Q.qs.length});
+  save(scopedKey('tf_quiz_history'), APP.quizHistory);
+  var el = document.getElementById('view-quiz');
+  el.innerHTML =
+    '<div class="quiz-hero" style="align-items:flex-start;">'+
+      '<h3>Round complete</h3>'+
+      '<div class="quiz-stat-row">'+
+        '<div class="quiz-stat"><b>'+Q.score+'</b><span>Points</span></div>'+
+        '<div class="quiz-stat"><b>'+Q.correct+'/'+Q.qs.length+'</b><span>Correct</span></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
+        '<button class="btn" id="playAgain">Play again</button>'+
+        '<button class="btn ghost" id="toLB" style="border-color:#fff;color:#fff;">View leaderboard</button>'+
+      '</div>'+
+    '</div>';
+  document.getElementById('playAgain').addEventListener('click', startQuiz);
+  document.getElementById('toLB').addEventListener('click', function(){ showView('leaderboard'); });
+}
+
+/* ============================ PREDICTIONS (closeness-based scoring) ============================ */
+function predictionPoints(pred, match){
+  if(!match.finished || !pred) return null;
+  var diff = Math.abs(pred.h-match.score[0]) + Math.abs(pred.a-match.score[1]);
+  return Math.max(0, 10-diff);
+}
+function pointTier(pts){
+  if(pts>=8) return 'tier-great';
+  if(pts>=4) return 'tier-good';
+  if(pts>=1) return 'tier-low';
+  return 'tier-miss';
+}
+function myTotalPredictionPoints(){
+  var total=0;
+  MATCHES.forEach(function(m){
+    var p = APP.predictions[m.id];
+    var pts = predictionPoints(p, m);
+    if(pts!==null) total += pts;
+  });
+  return total;
+}
+function renderPredictions(){
+  var el = document.getElementById('view-predictions');
+  var upcoming = MATCHES.filter(function(m){return !m.finished;}).sort(function(a,b){return a.date-b.date;});
+  var past = MATCHES.filter(function(m){return m.finished;}).sort(function(a,b){return b.date-a.date;});
+  el.innerHTML =
+    '<div class="section-head"><h2>Predictions</h2><p class="muted mono">'+myTotalPredictionPoints()+' pts banked</p></div>'+
+    '<p class="muted" style="font-size:12.5px;">Scoring is closeness-based: 10 minus the total goal difference between your pick and the real score (minimum 0). An exact score is worth the full 10.</p>'+
+    '<div class="card" style="gap:0;padding:4px 16px;"><div class="section-head" style="padding:10px 0;"><h3 style="font-size:16px;">Open fixtures</h3></div><div id="predOpen"></div></div>'+
+    '<div class="card" style="gap:0;padding:4px 16px;"><div class="section-head" style="padding:10px 0;"><h3 style="font-size:16px;">Results</h3></div><div id="predDone"></div></div>';
+
+  var openEl = document.getElementById('predOpen');
+  openEl.innerHTML = upcoming.length ? upcoming.map(predRowHTML).join('') : '<p class="muted" style="padding:14px 0;">No upcoming fixtures to predict right now.</p>';
+  var doneEl = document.getElementById('predDone');
+  doneEl.innerHTML = past.length ? past.map(predRowHTML).join('') : '<p class="muted" style="padding:14px 0;">No results yet.</p>';
+
+  document.querySelectorAll('[data-pred-save]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var id = btn.getAttribute('data-pred-save');
+      var hEl = document.querySelector('input[data-h="'+id+'"]');
+      var aEl = document.querySelector('input[data-a="'+id+'"]');
+      var h = parseInt(hEl.value,10), a = parseInt(aEl.value,10);
+      if(isNaN(h)||isNaN(a)||h<0||a<0){ hEl.style.borderColor='var(--bad)'; aEl.style.borderColor='var(--bad)'; return; }
+      APP.predictions[id] = {h:h,a:a};
+      save(scopedKey('tf_predictions'), APP.predictions);
+      renderPredictions();
+    });
+  });
+}
+function predRowHTML(m){
+  var home=TEAM_BY_ID[m.home], away=TEAM_BY_ID[m.away];
+  var pred = APP.predictions[m.id];
+  var right =
+    m.finished
+      ? '<span class="match-score mono">'+m.score[0]+' – '+m.score[1]+'</span>'
+      : '<div class="pred-inputs"><input type="number" min="0" data-h="'+m.id+'" value="'+(pred?pred.h:'')+'"><span>–</span><input type="number" min="0" data-a="'+m.id+'" value="'+(pred?pred.a:'')+'"><button class="btn sm" data-pred-save="'+m.id+'">Save</button></div>';
+  var ptsBadge = '';
+  if(m.finished){
+    var pts = predictionPoints(pred, m);
+    if(pts===null) ptsBadge = '<span class="pred-pts" style="background:var(--paper);color:var(--muted);">No pick</span>';
+    else ptsBadge = '<span class="pred-pts '+pointTier(pts)+'">'+pts+' pt'+(pts===1?'':'s')+'</span>';
+  } else if(pred){
+    ptsBadge = '<span class="pred-pts" style="background:var(--paper);color:var(--muted);">Your pick: '+pred.h+'–'+pred.a+'</span>';
+  }
+  return '<div class="pred-row">'+
+    '<div class="pred-teams">'+
+      '<div class="pred-team">'+crestSVG(m.home,22)+'<span>'+escapeHTML(home.name)+'</span></div>'+
+      '<span class="pred-vs">vs</span>'+
+      '<div class="pred-team">'+crestSVG(m.away,22)+'<span>'+escapeHTML(away.name)+'</span></div>'+
+    '</div>'+
+    right+
+    '<div class="pred-meta">'+escapeHTML(m.comp)+' · '+fmtDate(m.date)+'</div>'+
+    (ptsBadge? '<div style="width:100%;display:flex;justify-content:flex-end;">'+ptsBadge+'</div>' : '')+
+  '</div>';
+}
+
+/* ============================ CALENDAR (±3 day picker) ============================ */
+function renderCalendar(){
+  var el = document.getElementById('view-calendar');
+  var filters = ['all','myteams'].concat(COMPETITIONS);
+  var dayBtns = [];
+  for(var off=-3; off<=3; off++){ dayBtns.push(off); }
+  el.innerHTML =
+    '<div class="section-head"><h2>Match calendar</h2></div>'+
+    '<div class="daytabs" id="dayTabs">'+dayBtns.map(function(off){
+      var d = new Date(TODAY.getTime()+off*86400000);
+      var wk = d.toLocaleDateString([], {weekday:'short'});
+      var dn = d.getDate();
+      var active = APP.calDayOffset===off;
+      return '<button class="daytab '+(active?'active':'')+'" data-off="'+off+'">'+(off===0?'Today':wk)+'<b>'+dn+'</b></button>';
+    }).join('')+'</div>'+
+    '<div class="chiprow" id="calChips">'+filters.map(function(f){
+      var label = f==='all' ? 'All' : (f==='myteams' ? 'My teams' : f);
+      return '<button class="chip '+(APP.calFilter===f?'active':'')+'" data-f="'+f+'">'+escapeHTML(label)+'</button>';
+    }).join('')+'</div>'+
+    '<div class="cal-date-head" id="calDateHead"></div>'+
+    '<div id="calList" style="display:flex;flex-direction:column;gap:8px;"></div>';
+  document.querySelectorAll('#dayTabs .daytab').forEach(function(b){
+    b.addEventListener('click', function(){ APP.calDayOffset = parseInt(b.getAttribute('data-off'),10); renderCalendar(); });
+  });
+  document.querySelectorAll('#calChips .chip').forEach(function(c){
+    c.addEventListener('click', function(){ APP.calFilter = c.getAttribute('data-f'); renderCalendar(); });
+  });
+
+  var selectedDate = new Date(TODAY.getTime()+APP.calDayOffset*86400000);
+  var dateKey = selectedDate.toDateString();
+  document.getElementById('calDateHead').textContent = dateHeadLabel(selectedDate);
+
+  var list = MATCHES.filter(function(m){ return m.date.toDateString()===dateKey; }).sort(function(a,b){return a.date-b.date;});
+  if(APP.calFilter==='myteams' && APP.profile){
+    list = list.filter(function(m){ return APP.profile.teams.indexOf(m.home)>-1 || APP.profile.teams.indexOf(m.away)>-1; });
+  } else if(APP.calFilter!=='all' && APP.calFilter!=='myteams'){
+    list = list.filter(function(m){ return m.comp===APP.calFilter; });
+  }
+  var listEl = document.getElementById('calList');
+  if(list.length===0){
+    listEl.innerHTML = '<div class="empty">'+icon('calendar',34)+'<p><b>No fixtures on this day.</b></p><p class="muted">Try another day or filter.</p></div>';
+    return;
+  }
+  listEl.innerHTML = list.map(matchRowHTML).join('');
+}
+function matchRowHTML(m){
+  var home=TEAM_BY_ID[m.home], away=TEAM_BY_ID[m.away];
+  return '<div class="match-row">'+
+    '<div class="match-comp">'+escapeHTML(m.comp)+' · '+escapeHTML(m.venue)+'</div>'+
+    '<div class="match-core">'+
+      '<div class="match-team">'+crestSVG(m.home,24)+'<span>'+escapeHTML(home.name)+'</span></div>'+
+      (m.finished ? '<span class="match-score mono">'+m.score[0]+' – '+m.score[1]+'</span>' : '<span class="match-vs muted" style="font-size:12px;">vs</span>')+
+      '<div class="match-team" style="justify-content:flex-end;flex-direction:row-reverse;text-align:right;">'+crestSVG(m.away,24)+'<span>'+escapeHTML(away.name)+'</span></div>'+
+    '</div>'+
+    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">'+
+      '<span class="status-pill '+(m.finished?'fin':'up')+'">'+(m.finished?'Full-time':'Upcoming')+'</span>'+
+      '<span class="match-when">'+fmtDate(m.date)+'</span>'+
+    '</div>'+
+  '</div>';
+}
+
+/* ============================ LEADERBOARD (online — 10 fixed bots, real players join as they sign up) ============================ */
+var lbMetric = 'overall';
+function loadLiveBoard(){ return load('tf_leaderboard_live', {}); }
+function saveLiveBoard(b){ save('tf_leaderboard_live', b); }
+function syncLeaderboardEntry(){
+  if(!APP.userKey) return;
+  var board = loadLiveBoard();
+  var myQuiz = APP.quizHistory.reduce(function(s,h){return s+h.score;},0);
+  var myPred = myTotalPredictionPoints();
+  board[APP.userKey] = {name:APP.user, quiz:myQuiz, pred:myPred, updatedAt:Date.now()};
+  saveLiveBoard(board);
+}
+function renderLeaderboard(){
+  syncLeaderboardEntry();
+  var el = document.getElementById('view-leaderboard');
+  var liveBoard = loadLiveBoard();
+  var realRows = Object.keys(liveBoard).map(function(key){
+    var u = liveBoard[key];
+    return {name:u.name, quiz:u.quiz, pred:u.pred, overall:u.quiz+u.pred, me:(key===APP.userKey), kind:'online'};
+  });
+  var botRows = LEADERBOARD_SEED.map(function(u){ return {name:u.name, quiz:u.quiz, pred:u.pred, overall:u.quiz+u.pred, me:false, kind:'bot'}; });
+  var rows = botRows.concat(realRows);
+
+  var subtitle = realRows.length>0
+    ? LEADERBOARD_SEED.length+' seeded bots · '+realRows.length+' real player'+(realRows.length===1?'':'s')+' signed up on this device'
+    : LEADERBOARD_SEED.length+' seeded bots to start — real players appear here as people sign up and play';
+  el.innerHTML =
+    '<div class="section-head"><h2>Leaderboard</h2><p class="muted" style="font-size:11.5px;">'+subtitle+'</p></div>'+
+    '<div class="tabs" id="lbTabs">'+
+      '<button data-m="overall" class="'+(lbMetric==='overall'?'active':'')+'">Overall</button>'+
+      '<button data-m="quiz" class="'+(lbMetric==='quiz'?'active':'')+'">Quiz</button>'+
+      '<button data-m="pred" class="'+(lbMetric==='pred'?'active':'')+'">Predictions</button>'+
+    '</div>'+
+    '<div id="lbList" style="display:flex;flex-direction:column;gap:8px;"></div>';
+  document.querySelectorAll('#lbTabs button').forEach(function(b){
+    b.addEventListener('click', function(){ lbMetric=b.getAttribute('data-m'); renderLeaderboard(); });
+  });
+  rows.sort(function(a,b){ return b[lbMetric]-a[lbMetric]; });
+  document.getElementById('lbList').innerHTML = rows.map(function(r,i){
+    return '<div class="lb-row '+(r.me?'me':'')+'">'+
+      '<span class="lb-rank '+(i<3?'top3':'')+'">'+(i+1)+'</span>'+
+      '<span class="lb-name"><span class="avatar" style="width:26px;height:26px;font-size:11px;">'+initials(r.name)+'</span><span>'+escapeHTML(r.name)+(r.me?' (you)':'')+'</span>'+(r.kind==='bot'?'<span class="bottag">BOT</span>':'')+'</span>'+
+      '<span class="lb-pts">'+r[lbMetric]+'</span>'+
+    '</div>';
+  }).join('');
+}
+
+/* ============================ PROFILE ============================ */
+function renderProfile(){
+  var el = document.getElementById('view-profile');
+  var p = APP.profile;
+  el.innerHTML =
+    '<div class="card profile-head">'+
+      '<span class="avatar">'+initials(APP.user)+'</span>'+
+      '<div><h3 style="font-size:19px;">'+escapeHTML(APP.user)+'</h3><p class="muted" style="font-size:13px;">Following '+p.teams.length+' team'+(p.teams.length===1?'':'s')+' · '+p.country+'</p></div>'+
+    '</div>'+
+    '<div class="card"><h4 style="font-size:14px;margin-bottom:10px;">Country</h4><p>'+escapeHTML(p.country)+'</p></div>'+
+    '<div class="card"><h4 style="font-size:14px;margin-bottom:10px;">Favourite teams</h4><div class="taglist">'+
+      p.teams.map(function(id){ var t=TEAM_BY_ID[id]; return '<span class="tag">'+crestSVG(id,18)+escapeHTML(t.name)+'</span>'; }).join('')+
+    '</div></div>'+
+    '<div class="card"><h4 style="font-size:14px;margin-bottom:10px;">Competitions followed</h4><div class="taglist">'+
+      p.comps.map(function(c){ return '<span class="tag">'+escapeHTML(c)+'</span>'; }).join('')+
+    '</div></div>'+
+    '<div class="card"><h4 style="font-size:14px;margin-bottom:10px;">Account & settings</h4>'+
+      '<div style="display:flex;flex-direction:column;gap:10px;max-width:280px;">'+
+        '<button class="btn subtle block" id="editPrefs">Edit preferences</button>'+
+        '<button class="btn subtle block" id="changePw">Change password</button>'+
+        '<button class="btn subtle block" id="resetApp" style="color:var(--bad);">Reset all data</button>'+
+        '<button class="btn subtle block" id="logoutBtn">'+icon('logout',15)+' Log out</button>'+
+      '</div>'+
+      '<p class="ob-hint" style="margin-top:14px;max-width:280px;">'+(hasBackend()
+        ? 'Passwords are hashed server-side in the connected Apps Script and stored in your Google Sheet, not in this page.'
+        : 'Passwords are hashed (SHA-256 + a per-account salt) and stored only in this browser. This is a demo login, not a secure production authentication system.')+'</p>'+
+    '</div>';
+  document.getElementById('editPrefs').addEventListener('click', function(){ startOnboarding(true); });
+  document.getElementById('changePw').addEventListener('click', openChangePasswordModal);
+  document.getElementById('resetApp').addEventListener('click', openResetModal);
+  document.getElementById('logoutBtn').addEventListener('click', function(){
+    try{ localStorage.removeItem('tf_current_user'); localStorage.removeItem('tf_current_username'); }catch(e){}
+    location.hash=''; location.reload();
+  });
+}
+
+function openChangePasswordModal(){
+  var html =
+    '<div class="modal"><div class="modal-head"><h3>Change password</h3><button class="iconbtn" id="closeModal">'+icon('close',18)+'</button></div>'+
+    '<label class="field">Current password<input type="password" id="pwOld"></label>'+
+    '<label class="field">New password<input type="password" id="pwNew"></label>'+
+    '<label class="field">Confirm new password<input type="password" id="pwNew2"></label>'+
+    '<p class="ob-error" id="pwErr"></p>'+
+    '<button class="btn block" id="pwSave">Save new password</button></div>';
+  openModal(html);
+  document.getElementById('pwSave').addEventListener('click', function(){
+    var btn=this; var errEl=document.getElementById('pwErr');
+    var oldPw=document.getElementById('pwOld').value, newPw=document.getElementById('pwNew').value, confirmPw=document.getElementById('pwNew2').value;
+    if(!newPw || newPw.length<4){ errEl.textContent='New password must be at least 4 characters.'; return; }
+    if(newPw!==confirmPw){ errEl.textContent='New passwords do not match.'; return; }
+    btn.disabled=true; btn.textContent='Checking…';
+    if(hasBackend()){
+      backendCall('changePassword', {username:APP.user, oldPassword:oldPw, newPassword:newPw}).then(function(res){
+        if(!res || !res.ok){ errEl.textContent=(res&&res.error)||'Current password is incorrect.'; btn.disabled=false; btn.textContent='Save new password'; return; }
+        closeModal();
+      }).catch(function(){ errEl.textContent='Could not reach the server.'; btn.disabled=false; btn.textContent='Save new password'; });
+      return;
+    }
+    var accounts=loadAccounts(); var acc=accounts[APP.userKey];
+    sha256Hex(acc.salt+oldPw).then(function(hash){
+      if(hash!==acc.hash){ errEl.textContent='Current password is incorrect.'; btn.disabled=false; btn.textContent='Save new password'; return; }
+      var newSalt=randSalt();
+      sha256Hex(newSalt+newPw).then(function(newHash){
+        acc.salt=newSalt; acc.hash=newHash; accounts[APP.userKey]=acc; saveAccounts(accounts);
+        closeModal();
+      });
+    });
+  });
+}
+
+function openResetModal(){
+  var html =
+    '<div class="modal"><div class="modal-head"><h3>Reset all data</h3><button class="iconbtn" id="closeModal">'+icon('close',18)+'</button></div>'+
+    '<p class="muted" style="font-size:13px;">This clears your preferences, tutorial progress, predictions and quiz history on this device. Your account itself stays, so you can log back in and start fresh. Enter your password to confirm.</p>'+
+    '<label class="field">Password<input type="password" id="resetPw"></label>'+
+    '<p class="ob-error" id="resetErr"></p>'+
+    '<button class="btn block" style="background:var(--bad);" id="confirmReset">Confirm reset</button></div>';
+  openModal(html);
+  document.getElementById('confirmReset').addEventListener('click', function(){
+    var btn=this; var errEl=document.getElementById('resetErr');
+    var pw=document.getElementById('resetPw').value;
+    btn.disabled=true; btn.textContent='Checking…';
+    if(hasBackend()){
+      backendCall('login', {username:APP.user, password:pw}).then(function(res){
+        if(!res || !res.ok){ errEl.textContent='Incorrect password.'; btn.disabled=false; btn.textContent='Confirm reset'; return; }
+        doReset();
+      }).catch(function(){ errEl.textContent='Could not reach the server.'; btn.disabled=false; btn.textContent='Confirm reset'; });
+      return;
+    }
+    var accounts=loadAccounts(); var acc=accounts[APP.userKey];
+    sha256Hex(acc.salt+pw).then(function(hash){
+      if(hash!==acc.hash){ errEl.textContent='Incorrect password.'; btn.disabled=false; btn.textContent='Confirm reset'; return; }
+      doReset();
+    });
+  });
+}
+function doReset(){
+  [scopedKey('tf_profile'),scopedKey('tf_tut_progress'),scopedKey('tf_predictions'),scopedKey('tf_quiz_history')].forEach(function(k){ try{localStorage.removeItem(k);}catch(e){} });
+  closeModal();
+  location.hash=''; location.reload();
+}
+
+/* ============================ MODAL ============================ */
+function openModal(html){
+  var root = document.getElementById('modal-root');
+  root.innerHTML = '<div class="modal-wrap" id="modalWrap">'+html+'</div>';
+  document.getElementById('modalWrap').addEventListener('click', function(e){ if(e.target.id==='modalWrap') closeModal(); });
+  var cm = document.getElementById('closeModal'); if(cm) cm.addEventListener('click', closeModal);
+}
+function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
+
+/* ============================ AUTH (login / sign up) ============================ */
+function showAuth(){
+  document.getElementById('shell').hidden = true;
+  document.getElementById('onboarding').hidden = false;
+  APP.auth = { mode:'login', username:'', password:'', confirm:'', error:'', busy:false };
+  renderAuth();
+}
+function renderAuth(){
+  var a = APP.auth;
+  var isSignup = a.mode==='signup';
+  var html =
+    '<div class="ob-card">'+
+      '<div class="ob-logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.3 16 10l-1.5 4.7h-5L8 10z"/></svg><b>TheFootballer</b></div>'+
+      '<div class="authtabs"><button data-mode="login" class="'+(!isSignup?'active':'')+'">Log in</button><button data-mode="signup" class="'+(isSignup?'active':'')+'">Sign up</button></div>'+
+      '<div class="ob-step">'+
+        '<h3>'+(isSignup?'Create your account':'Welcome back')+'</h3>'+
+        '<p class="sub">'+(isSignup?'Pick a username and password to start following teams and playing games.':'Log in to pick up your news, predictions and quiz scores.')+'</p>'+
+        '<label class="field">Username<input type="text" id="authUsername" maxlength="20" placeholder="e.g. PitchProphet" value="'+escapeHTML(a.username)+'"></label>'+
+        '<label class="field">Password<input type="password" id="authPassword" placeholder="At least 4 characters"></label>'+
+        (isSignup? '<label class="field">Confirm password<input type="password" id="authConfirm"></label>' : '')+
+        '<p class="ob-error" id="authErr">'+escapeHTML(a.error)+'</p>'+
+      '</div>'+
+      '<div class="ob-actions"><span></span><button class="btn" id="authSubmit" '+(a.busy?'disabled':'')+'>'+(a.busy?'Please wait…':(isSignup?'Create account':'Log in'))+'</button></div>'+
+      '<p class="ob-hint">'+(hasBackend()
+        ? 'Accounts and passwords are stored in the connected Google Sheet backend — hashed server-side in Apps Script, never in this page.'
+        : 'This is a client-side demo: accounts and passwords are stored only in this browser (hashed, not in plain text) — not a real backend, so don\'t reuse a password you use elsewhere.')+'</p>'+
+    '</div>';
+  document.getElementById('onboarding').innerHTML = html;
+  document.querySelectorAll('[data-mode]').forEach(function(b){
+    b.addEventListener('click', function(){
+      APP.auth.mode = b.getAttribute('data-mode');
+      APP.auth.error=''; renderAuth();
+    });
+  });
+  document.getElementById('authUsername').addEventListener('input', function(e){ a.username=e.target.value; });
+  document.getElementById('authPassword').addEventListener('input', function(e){ a.password=e.target.value; });
+  var confirmEl = document.getElementById('authConfirm');
+  if(confirmEl) confirmEl.addEventListener('input', function(e){ a.confirm=e.target.value; });
+  document.getElementById('authSubmit').addEventListener('click', handleAuthSubmit);
+}
+function handleAuthSubmit(){
+  var a = APP.auth;
+  var uname = a.username.trim();
+  var key = uname.toLowerCase();
+  if(!uname){ a.error='Enter a username.'; renderAuth(); return; }
+  if(!a.password || a.password.length<4){ a.error='Password must be at least 4 characters.'; renderAuth(); return; }
+  if(a.mode==='signup' && a.password!==a.confirm){ a.error='Passwords do not match.'; renderAuth(); return; }
+  a.busy = true; a.error=''; renderAuth();
+
+  if(hasBackend()){
+    /* password hashing happens server-side in the Apps Script; we only send it over HTTPS */
+    backendCall(a.mode, {username:uname, password:a.password}).then(function(res){
+      if(!res || !res.ok){ a.busy=false; a.error=(res&&res.error)||'Something went wrong.'; renderAuth(); return; }
+      finishLogin(key, uname);
+    }).catch(function(){ a.busy=false; a.error='Could not reach the server. Check the Apps Script URL and your connection.'; renderAuth(); });
+    return;
+  }
+
+  /* local-only demo fallback: hashed client-side, stored only in this browser */
+  var accounts = loadAccounts();
+  if(a.mode==='signup'){
+    if(accounts[key]){ a.busy=false; a.error='That username is already taken.'; renderAuth(); return; }
+    var salt = randSalt();
+    sha256Hex(salt+a.password).then(function(hash){
+      accounts[key] = {username:uname, salt:salt, hash:hash};
+      saveAccounts(accounts);
+      finishLogin(key, uname);
+    });
+  } else {
+    var acc = accounts[key];
+    if(!acc){ a.busy=false; a.error='No account with that username. Try signing up.'; renderAuth(); return; }
+    sha256Hex(acc.salt+a.password).then(function(hash){
+      if(hash!==acc.hash){ a.busy=false; a.error='Incorrect password.'; renderAuth(); return; }
+      finishLogin(key, acc.username);
+    });
+  }
+}
+function finishLogin(key, uname){
+  save('tf_current_user', key);
+  save('tf_current_username', uname);
+  APP.userKey = key; APP.user = uname;
+  loadUserData();
+  if(APP.profile){ enterApp(); } else { startOnboarding(false); }
+}
+
+/* ============================ ONBOARDING (country / teams / competitions) ============================ */
+function startOnboarding(editing){
+  APP.ob = editing && APP.profile
+    ? { step:1, country:APP.profile.country, teams:APP.profile.teams.slice(), comps:APP.profile.comps.slice() }
+    : { step:1, country:null, teams:[], comps:[] };
+  document.getElementById('shell').hidden = true;
+  document.getElementById('onboarding').hidden = false;
+  renderOnboarding();
+}
+function renderOnboarding(){
+  var ob = APP.ob;
+  var steps = [null,'country','teams','comps'];
+  var kind = steps[ob.step];
+  var dots = [1,2,3].map(function(i){ return '<i class="'+(i<=ob.step?'on':'')+'"></i>'; }).join('');
+  var body = '';
+  var MAX_TEAMS = 8;
+
+  if(kind==='country'){
+    body =
+      '<div class="ob-step">'+
+        '<h3>Pick your country</h3><p class="sub">We\'ll surface news and competitions local to you.</p>'+
+        '<div class="pickgrid single">'+COUNTRIES.map(function(c){
+          return '<button class="pickitem '+(ob.country===c?'sel':'')+'" data-country="'+escapeHTML(c)+'" style="justify-content:center;text-align:center;">'+escapeHTML(c)+'</button>';
+        }).join('')+'</div>'+
+        '<p class="ob-error" id="obErr"></p>'+
+      '</div>';
+  } else if(kind==='teams'){
+    body =
+      '<div class="ob-step">'+
+        '<h3>Pick your favourite team(s)</h3><p class="sub">Choose up to '+MAX_TEAMS+' — your "For You" feed is built around these.</p>'+
+        '<div class="ob-counter">'+ob.teams.length+' / '+MAX_TEAMS+' selected</div>'+
+        '<div class="pickgrid">'+TEAMS.map(function(t){
+          return '<button class="pickitem '+(ob.teams.indexOf(t.id)>-1?'sel':'')+'" data-team="'+t.id+'">'+crestSVG(t.id,26)+'<span>'+escapeHTML(t.name)+'<small>'+escapeHTML(t.country)+'</small></span></button>';
+        }).join('')+'</div>'+
+        '<p class="ob-error" id="obErr"></p>'+
+      '</div>';
+  } else if(kind==='comps'){
+    body =
+      '<div class="ob-step">'+
+        '<h3>Follow some competitions</h3><p class="sub">Pick the leagues and cups you want in your calendar and feed.</p>'+
+        '<div class="ob-counter">'+ob.comps.length+' selected</div>'+
+        '<div class="pickgrid">'+COMPETITIONS.map(function(c){
+          return '<button class="pickitem '+(ob.comps.indexOf(c)>-1?'sel':'')+'" data-comp="'+escapeHTML(c)+'" style="grid-template-columns:none;">'+escapeHTML(c)+'</button>';
+        }).join('')+'</div>'+
+        '<p class="ob-error" id="obErr"></p>'+
+      '</div>';
+  }
+
+  document.getElementById('onboarding').innerHTML =
+    '<div class="ob-card">'+
+      '<div class="ob-logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.3 16 10l-1.5 4.7h-5L8 10z"/></svg><b>TheFootballer</b></div>'+
+      '<div class="ob-progress">'+dots+'</div>'+
+      body+
+      '<div class="ob-actions">'+
+        (ob.step>1 ? '<button class="btn subtle" id="obBack">Back</button>' : '<span></span>')+
+        '<button class="btn" id="obNext">'+(ob.step===3?'Enter TheFootballer':'Continue')+'</button>'+
+      '</div>'+
+    '</div>';
+
+  if(kind==='country'){
+    document.querySelectorAll('[data-country]').forEach(function(b){
+      b.addEventListener('click', function(){ ob.country = b.getAttribute('data-country'); renderOnboarding(); });
+    });
+  }
+  if(kind==='teams'){
+    document.querySelectorAll('[data-team]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var id = b.getAttribute('data-team');
+        var idx = ob.teams.indexOf(id);
+        if(idx>-1) ob.teams.splice(idx,1);
+        else if(ob.teams.length<MAX_TEAMS) ob.teams.push(id);
+        renderOnboarding();
+      });
+    });
+  }
+  if(kind==='comps'){
+    document.querySelectorAll('[data-comp]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var c = b.getAttribute('data-comp');
+        var idx = ob.comps.indexOf(c);
+        if(idx>-1) ob.comps.splice(idx,1); else ob.comps.push(c);
+        renderOnboarding();
+      });
+    });
+  }
+  if(ob.step>1){ document.getElementById('obBack').addEventListener('click', function(){ ob.step -= 1; renderOnboarding(); }); }
+  document.getElementById('obNext').addEventListener('click', function(){ onboardingNext(); });
+}
+function onboardingNext(){
+  var ob = APP.ob;
+  var err = document.getElementById('obErr');
+  if(ob.step===1){
+    if(!ob.country){ if(err) err.textContent='Pick a country to continue.'; return; }
+  }
+  if(ob.step===2){
+    if(ob.teams.length===0){ if(err) err.textContent='Pick at least one team.'; return; }
+  }
+  if(ob.step===3){
+    if(ob.comps.length===0){ if(err) err.textContent='Pick at least one competition.'; return; }
+    APP.profile = { country: ob.country, teams: ob.teams.slice(), comps: ob.comps.slice() };
+    save(scopedKey('tf_profile'), APP.profile);
+    enterApp();
+    return;
+  }
+  ob.step += 1;
+  renderOnboarding();
+}
+
+/* ============================ BOOT ============================ */
+function enterApp(){
+  document.getElementById('onboarding').hidden = true;
+  document.getElementById('shell').hidden = false;
+  document.getElementById('userAvatar').textContent = initials(APP.user);
+  document.getElementById('userNameChip').textContent = APP.user;
+  document.getElementById('profileChip').onclick = function(){ showView('profile'); };
+  var startView = (location.hash||'').replace('#','');
+  var valid = NAV_ITEMS.some(function(n){return n.id===startView;});
+  showView(valid?startView:'home');
+}
+function applyTheme(){
+  var t = load('tf_theme', null);
+  if(t) document.documentElement.setAttribute('data-theme', t);
+  updateThemeIcon();
+}
+function updateThemeIcon(){
+  var t = document.documentElement.getAttribute('data-theme');
+  var dark = t==='dark' || (!t && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.getElementById('themeToggle').innerHTML = icon(dark?'sun':'moon',18);
+}
+function boot(){
+  buildNav();
+  applyTheme();
+  document.getElementById('themeToggle').addEventListener('click', function(){
+    var cur = document.documentElement.getAttribute('data-theme');
+    var dark = cur==='dark' || (!cur && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = dark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    save('tf_theme', next);
+    updateThemeIcon();
+  });
+  var cur = load('tf_current_user', null);
+  if(cur){
+    var validSession = hasBackend() || loadAccounts()[cur];
+    if(validSession){
+      APP.userKey = cur;
+      APP.user = load('tf_current_username', cur);
+      loadUserData();
+      if(APP.profile){ enterApp(); return; }
+      startOnboarding(false);
+      return;
+    }
+  }
+  showAuth();
+}
+
+try{
+  if(window.claude && window.claude.hot){
+    window.claude.hot.snapshot(function(){ return { view: APP.view }; });
+    if(window.claude.hot.ready){
+      window.claude.hot.ready(function(data){ boot(); if(data && data.view){ try{ if(APP.profile) showView(data.view); }catch(e){} } });
+    } else { boot(); }
+  } else { boot(); }
+}catch(e){ boot(); }
+
+})();
+</script>
